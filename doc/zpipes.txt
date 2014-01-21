@@ -1,0 +1,24 @@
+zpipes(1)
+=========
+
+NAME
+----
+zpipes - elastic pipes proof of concept
+
+SYNOPSIS
+--------
+----
+zpipes servicename
+----
+
+DESCRIPTION
+-----------
+Starts the zpipes service with a given name. To talk to the zpipes service you 
+open a ZeroMQ DEALER socket and send commands in the form of multipart messages,
+then read replies. Supports two commands:
+
+* PUT | pipename | opaque-data
+* GET | pipename | size
+
+Where size is an ascii integer, or empty/zero meaning "as much data as available".
+

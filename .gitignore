@@ -1,0 +1,44 @@
+# Object files
+*.o
+*.ko
+
+# Libraries
+*.lib
+*.a
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+*.lo
+
+# Executables
+*.exe
+*.out
+*.app
+
+Makefile
+Makefile.in
+aclocal.m4
+autom4te.cache/
+config.log
+config.status
+config/
+configure
+doc/Makefile
+doc/Makefile.in
+doc/*.3
+doc/*.7
+libtool
+.deps
+.libs
+src/Makefile
+src/Makefile.in
+src/zpipes
+src/platform.h
+src/platform.h.in
+src/platform.h.in~
+src/stamp-h1
+src/test-suite.log
+

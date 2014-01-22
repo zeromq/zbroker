@@ -13,6 +13,12 @@ A pipe is a one-directional stream of data "chunks" from one application to anot
 * Pipes are named using any convention that suits the application.
 * The application is responsible for properly closing pipes, thus releasing resources.
 
+## Command Line Syntax
+
+When run without arguments, the zpipes broker uses the name "default". You may run at most one broker with the same name, on a single machine instance. If you wish to use multiple brokers, e.g. for testing, you must use a different name for each.
+
+To end a zpipes broker, send a TERM or INT signal (Ctrl-C).
+
 ## IPC Command Interface
 
 The zpipes broker accepts ZeroMQ ipc:// connections on the "ipc://@/zpipes/local" endpoint, which is an abstract IPC endpoint. The sole interface between applications and the broker is across such IPC connections. The command interface has these commands, consisting of multiframe data:

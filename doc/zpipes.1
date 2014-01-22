@@ -2,12 +2,12 @@
 .\"     Title: zpipes
 .\"    Author: [see the "AUTHORS" section]
 .\" Generator: DocBook XSL Stylesheets v1.76.1 <http://docbook.sf.net/>
-.\"      Date: 01/21/2014
+.\"      Date: 01/22/2014
 .\"    Manual: zpipes Manual
 .\"    Source: zpipes 0.0.1
 .\"  Language: English
 .\"
-.TH "ZPIPES" "1" "01/21/2014" "zpipes 0\&.0\&.1" "zpipes Manual"
+.TH "ZPIPES" "1" "01/22/2014" "zpipes 0\&.0\&.1" "zpipes Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,15 +28,18 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-zpipes \- elastic pipes proof of concept
+zpipes \- reliable named pipes service\&.
 .SH "SYNOPSIS"
 .sp
 .nf
-zpipes servicename
+zpipes [name]
 .fi
 .SH "DESCRIPTION"
+.SS "Overview"
 .sp
-Starts the zpipes service with a given name\&. To talk to the zpipes service you open a ZeroMQ DEALER socket and send commands in the form of multipart messages, then read replies\&. Supports two commands:
+The zpipes broker provides a reliable named pipes service to application programs\&.
+.sp
+A pipe is a one\-directional stream of data "chunks" from one application to another\&.
 .sp
 .RS 4
 .ie n \{\
@@ -46,7 +49,7 @@ Starts the zpipes service with a given name\&. To talk to the zpipes service you
 .sp -1
 .IP \(bu 2.3
 .\}
-PUT | pipename | opaque\-data
+Currently, all applications must be on the same machine instance\&.
 .RE
 .sp
 .RS 4
@@ -57,21 +60,111 @@ PUT | pipename | opaque\-data
 .sp -1
 .IP \(bu 2.3
 .\}
-GET | pipename | size
+Currently, a pipe accepts multiple writers, and a single reader\&.
 .RE
 .sp
-Where size is an ascii integer, or empty/zero meaning "as much data as available"\&.
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+Pipes are named using any convention that suits the application\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+The application is responsible for properly closing pipes, thus releasing resources\&.
+.RE
+.SS "Command Line Syntax"
+.sp
+When run without arguments, the zpipes broker uses the name "default"\&. You may run at most one broker with the same name, on a single machine instance\&. If you wish to use multiple brokers, e\&.g\&. for testing, you must use a different name for each\&.
+.sp
+To end a zpipes broker, send a TERM or INT signal (Ctrl\-C)\&.
+.SS "IPC Command Interface"
+.sp
+The zpipes broker accepts ZeroMQ ipc:// connections on the "ipc://@/zpipes/local" endpoint, which is an abstract IPC endpoint\&. The sole interface between applications and the broker is across such IPC connections\&. The command interface has these commands, consisting of multiframe data:
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"OPEN" / pipename \(em opens a named pipe, for reading or writing\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"CLOSE" / pipename \(em closes a named pipe\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"READ" / pipename \(em reads next chunk of data from the specified pipe\&.
+.RE
+.sp
+.RS 4
+.ie n \{\
+\h'-04'\(bu\h'+03'\c
+.\}
+.el \{\
+.sp -1
+.IP \(bu 2.3
+.\}
+"WRITE" / pipename / chunk \(em writes a chunk of data to the specified pipe\&.
+.RE
+.sp
+The broker replies to valid OPEN, CLOSE, and WRITE commands with a single frame containing "OK"\&.
+.sp
+The broker replies to a valid READ command with a single frame containing the chunk of data\&. If there is no data available, the READ command will block until data is available\&.
+.sp
+The application can pipeline commands, e\&.g\&. sending multiple WRITE commands, before reading the responses\&.
+.SS "Reliability"
+.sp
+The zpipes broker does not store chunks on disk, so if the broker process crashes or is killed, data may be lost\&. However pipes and the chunks they contain will survive the stop/restart of application processes\&. Thus one process may write to a pipe, then exit, and then another process may start up, and read from the pipe\&.
+.SS "End of Stream"
+.sp
+If the application wants to signal the end of the stream it must send a recognizable chunk to indicate that\&. The zpipes model treats pipes as infinite streams\&.
+.SS "Multiple Writers"
+.sp
+Multiple applications can write to the same pipe\&. Chunks will then be fair\-queued from writers, so that heavy writers do not block lighter ones\&.
+.SS "Ownership and Contributing"
+.sp
+To be defined\&.
 .SH "AUTHORS"
 .sp
 The zpipes manual was written by Pieter Hintjens<\m[blue]\fBph@imatix\&.com\fR\m[]\&\s-2\u[1]\d\s+2>\&.
 .SH "RESOURCES"
 .sp
-Main web site: \m[blue]\fBhttp://theedg\&.es/\fR\m[]
+Main web site: \m[blue]\fBhttp://zyre\&.org\fR\m[]
 .sp
 Report bugs to the 0MQ development mailing list: <\m[blue]\fBzeromq\-dev@lists\&.zeromq\&.org\fR\m[]\&\s-2\u[2]\d\s+2>
 .SH "COPYRIGHT"
 .sp
-Copyright the Contributors\&. License LGPLv3+
+Copyright the Contributors\&. License TBD
 .SH "NOTES"
 .IP " 1." 4
 ph@imatix.com

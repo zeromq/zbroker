@@ -5,11 +5,10 @@
 //  Readers are blocked until data arrives.
 //
 //  IPC command protocol:
-//      OPEN pipename
-//      READ pipename
-//      WRITE pipename chunk
-//      CLOSE pipename
-//
+//      C:OPEN pipename            S:OK
+//      C:READ pipename            S:chunk
+//      C:WRITE pipename chunk     S:OK
+//      C:CLOSE pipename           S:OK
 
 #include "czmq.h"
 

@@ -2,7 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.61)
 #
-AC_INIT([zpipes],0.0.1,[zeromq-dev@lists.zeromq.org])
+# The version number is extracted from include/zpipes.h using
+# the version.sh script. Hence, it should be updated there.
+# The version in git should reflect the *next* version planned.
+#
+AC_INIT([zpipes],[m4_esyscmd([./version.sh zpipes])],[zeromq-dev@lists.zeromq.org])
 
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
@@ -26,8 +30,8 @@ AC_SUBST(PACKAGE_VERSION)
 #
 # Libtool -version-info (ABI version)
 #
-# Currently 2.0.1 ("stable"). Don't change this unless you
-# know exactly what you're doing and have read and understand
+# Currently 0.0.0. Don't change this unless you know
+# exactly what you're doing, and have read and understand
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
 #
 # libzpipes -version-info
@@ -136,6 +140,9 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <zyre.h>],
     [AC_MSG_ERROR([no. Please specify libzyre installation prefix using --with-zyre])])
 
 
+# Platform specific checks
+zpipes_on_mingw32="no"
+
 # Host speciffic checks
 AC_CANONICAL_HOST
 
@@ -207,6 +214,13 @@ case "${host_os}" in
         CPPFLAGS="-D_POSIX_C_SOURCE=200112L"
         AC_DEFINE(ZPIPES_HAVE_HPUX, 1, [Have HPUX OS])
         ;;
+    *mingw32*)
+        AC_DEFINE(ZPIPES_HAVE_WINDOWS, 1, [Have Windows OS])
+        AC_DEFINE(ZPIPES_HAVE_MINGW32, 1, [Have MinGW32])
+        AC_CHECK_HEADERS(windows.h)
+        zpipes_on_mingw32="yes"
+        zpipes_install_man="no"
+        ;;
     *cygwin*)
         # Define on Cygwin to enable all library features
         CPPFLAGS="-D_GNU_SOURCE $CPPFLAGS"
@@ -247,13 +261,14 @@ if test "x$GCC" = "xyes"; then
     CPPFLAGS="-pedantic -Werror -Wall ${CPPFLAGS}"
 fi
 
+AM_CONDITIONAL(ON_MINGW, test "x$zpipes_on_mingw32" = "xyes")
 AM_CONDITIONAL(INSTALL_MAN, test "x$zpipes_install_man" = "xyes")
 AM_CONDITIONAL(BUILD_DOC, test "x$zpipes_build_doc" = "xyes")
 
 # Checks for library functions.
 AC_TYPE_SIGNAL
-AC_CHECK_FUNCS(perror gettimeofday memset)
+AC_CHECK_FUNCS(perror gettimeofday memset getifaddrs freeifaddrs)
 
 # Specify output files
-AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile])
+AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile src/libzpipes.pc])
 AC_OUTPUT

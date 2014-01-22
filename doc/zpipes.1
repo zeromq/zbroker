@@ -4,10 +4,10 @@
 .\" Generator: DocBook XSL Stylesheets v1.76.1 <http://docbook.sf.net/>
 .\"      Date: 01/22/2014
 .\"    Manual: zpipes Manual
-.\"    Source: zpipes 0.0.1
+.\"    Source: zpipes 0.0.2
 .\"  Language: English
 .\"
-.TH "ZPIPES" "1" "01/22/2014" "zpipes 0\&.0\&.1" "zpipes Manual"
+.TH "ZPIPES" "1" "01/22/2014" "zpipes 0\&.0\&.2" "zpipes Manual"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -28,7 +28,7 @@
 .\" * MAIN CONTENT STARTS HERE *
 .\" -----------------------------------------------------------------
 .SH "NAME"
-zpipes \- reliable named pipes service\&.
+zpipes \- reliable, distributed named pipes
 .SH "SYNOPSIS"
 .sp
 .nf
@@ -37,9 +37,7 @@ zpipes [name]
 .SH "DESCRIPTION"
 .SS "Overview"
 .sp
-The zpipes broker provides a reliable named pipes service to application programs\&.
-.sp
-A pipe is a one\-directional stream of data "chunks" from one application to another\&.
+The zpipes broker provides a reliable named pipes service\&. A pipe is a one\-directional stream of data "chunks" between applications\&.
 .sp
 .RS 4
 .ie n \{\

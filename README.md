@@ -1,12 +1,10 @@
 # zpipes
 
-A reliable named pipes service.
+Reliable, distributed named pipes.
 
 ## Overview
 
-The zpipes broker provides a reliable named pipes service to application programs.
-
-A pipe is a one-directional stream of data "chunks" from one application to another.
+The zpipes broker provides a reliable named pipes service. A pipe is a one-directional stream of data "chunks" between applications.
 
 * Currently, all applications must be on the same machine instance.
 * Currently, a pipe accepts multiple writers, and a single reader.

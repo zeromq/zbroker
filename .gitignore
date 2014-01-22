@@ -41,5 +41,7 @@ src/platform.h.in
 src/platform.h.in~
 src/stamp-h1
 src/test-suite.log
-src/zpipes_test
+src/zpipes_selftest
+*.la
+*.pc
 

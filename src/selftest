@@ -2,16 +2,7 @@
 #
 #   Run selftests and check memory
 
-#   Valgrind command
 VG="valgrind --tool=memcheck --leak-check=full --show-reachable=yes --suppressions=valgrind.supp"
-
-gcc -g -o zpipes zpipes.c ${CFLAGS} ${LDFLAGS} -DHAVE_CONFIG_H -lczmq -lzmq -lzyre -luuid -lsodium
-gcc -g -o zpipes_test zpipes_test.c ${CFLAGS} ${LDFLAGS} -DHAVE_CONFIG_H -lczmq -lzmq -lzyre -luuid -lsodium
-
-( sleep 1; ./zpipes_test )&
-
-#   Start brokers and allow for cluster to be ready
-$VG ./zpipes local #2>output
-killall -9 zpipes_test
+gcc -g -o zpipes_selftest zpipes*.c ${CFLAGS} ${LDFLAGS} -DHAVE_CONFIG_H -lczmq -lzmq -lzyre -luuid -lsodium
+$VG ./zpipes_selftest
 rm -f vgcore.*
-#more output

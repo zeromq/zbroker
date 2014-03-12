@@ -36,7 +36,12 @@ AC_SUBST(PACKAGE_VERSION)
 #
 # libzpipes -version-info
 LTVER="0:0:0"
+
+# libzpipes_client -version-info
+CLIENT_LTVER="0:0:0"
+
 AC_SUBST(LTVER)
+AC_SUBST(CLIENT_LTVER)
 
 # Capture c flags
 ZPIPES_ORIG_CFLAGS="${CFLAGS:-none}"
@@ -270,5 +275,5 @@ AC_TYPE_SIGNAL
 AC_CHECK_FUNCS(perror gettimeofday memset getifaddrs freeifaddrs)
 
 # Specify output files
-AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile src/libzpipes.pc])
+AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile src/libzpipes.pc src/libzpipesclient.pc])
 AC_OUTPUT

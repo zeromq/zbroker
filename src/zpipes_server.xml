@@ -1,0 +1,65 @@
+<class
+    name = "zpipes_server"
+    title = "ZPIPES server"
+    proto = "zpipes_msg"
+    script = "zproto_server_c"
+    header = "../include"
+    >
+    This is a server implementation for the ZPIPES protocol
+    <include filename = "license.xml" />
+
+    <!-- State machine for a client connection -->
+    <state name = "start">
+        <event name = "input" next = "reading">
+            <action name = "send" message = "ready" />
+        </event>
+        <event name = "output" next = "writing">
+            <action name = "send" message = "ready" />
+        </event>
+    </state>
+
+    <state name = "reading">
+        <event name = "fetch" next = "reading">
+            <action name = "send" message = "fetched" />
+        </event>
+        <event name = "close">
+            <action name = "send" message = "closed" />
+            <action name = "terminate" />
+        </event>
+        <event name = "empty">
+            <action name = "send" message = "empty" />
+        </event>
+        <event name = "timeout">
+            <action name = "send" message = "timeout" />
+        </event>
+    </state>
+
+    <state name = "writing">
+        <event name = "store" next = "writing">
+            <action name = "send" message = "stored" />
+        </event>
+        <event name = "close">
+            <action name = "send" message = "closed" />
+            <action name = "terminate" />
+        </event>
+    </state>
+
+    <state name = "defaults">
+        <event name = "failed">
+            <action name = "send" message = "failed" />
+            <action name = "terminate" />
+        </event>
+        <event name = "expired">
+        </event>
+        <event name = "heartbeat">
+        </event>
+    </state>
+
+    <!-- API methods
+    <method name = "somename" return = "number">
+        One-line description of method here
+        <argument name = "some value" type = "string">What is this argument?</argument>
+        <argument name = "some value" type = "number">What is this argument?</argument>
+    </method>
+    -->
+</class>

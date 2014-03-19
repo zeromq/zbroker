@@ -28,7 +28,8 @@
 #   error "zpipes needs Zyre/1.1.0 or later"
 #endif
 
-//  The public API consists of the "zpipes_t" class
+//  The public API consists of the "zpipes_t" class plus other
+//  external API classes
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,5 +55,6 @@ CZMQ_EXPORT void
 }
 #endif
 
+#include "zpipes_msg.h"
 
 #endif

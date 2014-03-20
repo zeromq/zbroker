@@ -12,6 +12,7 @@ libzpipes_la_SOURCES = \
 	zpipes.c \
 	zpipes_msg.c \
 	zpipes_server.c \
+	zpipes_server_engine.h \
 	zpipes_agent.c
 	
 libzpipesclient_la_SOURCES = \

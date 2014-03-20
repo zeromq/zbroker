@@ -99,9 +99,10 @@ void
 
 //  Parse a zpipes_msg from zmsg_t. Returns a new object, or NULL if
 //  the message could not be parsed, or was NULL. If the socket type is
-//  ZMQ_ROUTER, then parses the first frame as a routing_id.
+//  ZMQ_ROUTER, then parses the first frame as a routing_id. Destroys msg
+//  and nullifies the msg refernce.
 zpipes_msg_t *
-    zpipes_msg_decode (zmsg_t *msg, int socket_type);
+    zpipes_msg_decode (zmsg_t **msg_p, int socket_type);
 
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
 //  object or NULL if error. Use when not in control of sending the message.
@@ -222,11 +223,15 @@ uint32_t
 void
     zpipes_msg_set_timeout (zpipes_msg_t *self, uint32_t timeout);
 
-//  Get/set the chunk field
+//  Get a copy of the chunk field
 zchunk_t *
     zpipes_msg_chunk (zpipes_msg_t *self);
+//  Get the chunk field and transfer ownership to caller
+zchunk_t *
+    zpipes_msg_get_chunk (zpipes_msg_t *self);
+//  Set the chunk field, transferring ownership from caller
 void
-    zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t *chunk);
+    zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t **chunk_p);
 
 //  Self test of this class
 int

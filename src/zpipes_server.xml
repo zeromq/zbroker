@@ -11,18 +11,22 @@
     <!-- State machine for a client connection -->
     <state name = "start">
         <event name = "input" next = "reading">
+            <action name = "open pipe for input" />
             <action name = "send" message = "ready" />
         </event>
         <event name = "output" next = "writing">
+            <action name = "open pipe for output" />
             <action name = "send" message = "ready" />
         </event>
     </state>
 
     <state name = "reading">
         <event name = "fetch" next = "reading">
+            <action name = "fetch chunk from pipe" />
             <action name = "send" message = "fetched" />
         </event>
         <event name = "close">
+            <action name = "close pipe" />
             <action name = "send" message = "closed" />
             <action name = "terminate" />
         </event>
@@ -36,9 +40,11 @@
 
     <state name = "writing">
         <event name = "store" next = "writing">
+            <action name = "store chunk to pipe" />
             <action name = "send" message = "stored" />
         </event>
         <event name = "close">
+            <action name = "close pipe" />
             <action name = "send" message = "closed" />
             <action name = "terminate" />
         </event>

@@ -13,21 +13,12 @@
     * The code generation script that built this file: zproto_codec_c
     ************************************************************************
     
-    Copyright contributors as noted in the AUTHORS file.                    
-    This file is part of zbroker, the ZeroMQ broker project.                
-                                                                            
-    This is free software; you can redistribute it and/or modify it under   
-    the terms of the GNU Lesser General Public License as published by the  
-    Free Software Foundation; either version 3 of the License, or (at your  
-    option) any later version.                                              
-                                                                            
-    This software is distributed in the hope that it will be useful, but    
-    WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABIL-
-    ITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General     
-    Public License for more details.                                        
-                                                                            
-    You should have received a copy of the GNU Lesser General Public License
-    along with this program. If not, see <http://www.gnu.org/licenses/>.    
+    Copyright contributors as noted in the AUTHORS file.               
+    This file is part of zbroker, the ZeroMQ broker project.           
+                                                                       
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.           
     =========================================================================
 */
 
@@ -228,11 +219,14 @@ zpipes_msg_destroy (zpipes_msg_t **self_p)
 //  --------------------------------------------------------------------------
 //  Parse a zpipes_msg from zmsg_t. Returns a new object, or NULL if
 //  the message could not be parsed, or was NULL. If the socket type is
-//  ZMQ_ROUTER, then parses the first frame as a routing_id.
+//  ZMQ_ROUTER, then parses the first frame as a routing_id. Destroys msg
+//  and nullifies the msg refernce.
 
 zpipes_msg_t *
-zpipes_msg_decode (zmsg_t *msg, int socket_type)
+zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
 {
+    assert (msg_p);
+    zmsg_t *msg = *msg_p;
     if (msg == NULL)
         return NULL;
         
@@ -323,19 +317,20 @@ zpipes_msg_decode (zmsg_t *msg, int socket_type)
             goto malformed;
     }
     //  Successful return
-    zmsg_destroy (&msg);
+    zframe_destroy (&frame);
+    zmsg_destroy (msg_p);
     return self;
 
     //  Error returns
     malformed:
         printf ("E: malformed message '%d'\n", self->id);
     empty:
-        if (frame)
-            zframe_destroy (&frame);
-        zmsg_destroy (&msg);
+        zframe_destroy (&frame);
+        zmsg_destroy (msg_p);
         zpipes_msg_destroy (&self);
         return (NULL);
 }
+
 
 //  --------------------------------------------------------------------------
 //  Receive and parse a zpipes_msg from the socket. Returns new object or
@@ -345,9 +340,10 @@ zpipes_msg_t *
 zpipes_msg_recv (void *input)
 {
     assert (input);
-    //  Receive and decode message
-    return zpipes_msg_decode (zmsg_recv (input), zsocket_type (input));
+    zmsg_t *msg = zmsg_recv (input);
+    return zpipes_msg_decode (&msg, zsocket_type (input));
 }
+
 
 //  --------------------------------------------------------------------------
 //  Receive and parse a zpipes_msg from the socket. Returns new object, 
@@ -357,10 +353,9 @@ zpipes_msg_t *
 zpipes_msg_recv_nowait (void *input)
 {
     assert (input);
-    //  Receive and decode message
-    return zpipes_msg_decode (zmsg_recv_nowait (input), zsocket_type (input));
+    zmsg_t *msg = zmsg_recv_nowait (input);
+    return zpipes_msg_decode (&msg, zsocket_type (input));
 }
-
 
 
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
@@ -482,8 +477,8 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
             break;
 
         case ZPIPES_MSG_FETCHED:
-            PUT_NUMBER4 (zchunk_size (self->chunk));
             if (self->chunk) {
+                PUT_NUMBER4 (zchunk_size (self->chunk));
                 memcpy (self->needle,
                         zchunk_data (self->chunk),
                         zchunk_size (self->chunk));
@@ -500,8 +495,8 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
             break;
 
         case ZPIPES_MSG_STORE:
-            PUT_NUMBER4 (zchunk_size (self->chunk));
             if (self->chunk) {
+                PUT_NUMBER4 (zchunk_size (self->chunk));
                 memcpy (self->needle,
                         zchunk_data (self->chunk),
                         zchunk_size (self->chunk));
@@ -643,7 +638,8 @@ zpipes_msg_send_fetched (
     zchunk_t *chunk)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_FETCHED);
-    zpipes_msg_set_chunk (self, zchunk_dup (chunk));
+    zchunk_t *chunk_copy = zchunk_dup (chunk);
+    zpipes_msg_set_chunk (self, &chunk_copy);
     return zpipes_msg_send (&self, output);
 }
 
@@ -681,7 +677,8 @@ zpipes_msg_send_store (
     zchunk_t *chunk)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_STORE);
-    zpipes_msg_set_chunk (self, zchunk_dup (chunk));
+    zchunk_t *chunk_copy = zchunk_dup (chunk);
+    zpipes_msg_set_chunk (self, &chunk_copy);
     return zpipes_msg_send (&self, output);
 }
 
@@ -1017,7 +1014,7 @@ zpipes_msg_set_timeout (zpipes_msg_t *self, uint32_t timeout)
 
 
 //  --------------------------------------------------------------------------
-//  Get/set the chunk field
+//  Get the chunk field without transferring ownership
 
 zchunk_t *
 zpipes_msg_chunk (zpipes_msg_t *self)
@@ -1026,14 +1023,26 @@ zpipes_msg_chunk (zpipes_msg_t *self)
     return self->chunk;
 }
 
-//  Takes ownership of supplied chunk
+//  Get the chunk field and transfer ownership to caller
+
+zchunk_t *
+zpipes_msg_get_chunk (zpipes_msg_t *self)
+{
+    zchunk_t *chunk = self->chunk;
+    self->chunk = NULL;
+    return chunk;
+}
+
+//  Set the chunk field, transferring ownership from caller
+
 void
-zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t *chunk)
+zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t **chunk_p)
 {
     assert (self);
-    if (self->chunk)
-        zchunk_destroy (&self->chunk);
-    self->chunk = chunk;
+    assert (chunk_p);
+    zchunk_destroy (&self->chunk);
+    self->chunk = *chunk_p;
+    *chunk_p = NULL;
 }
 
 
@@ -1171,7 +1180,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    zpipes_msg_set_chunk (self, zchunk_new ("Captcha Diem", 12));
+    zchunk_t *fetched_chunk = zchunk_new ("Captcha Diem", 12);
+    zpipes_msg_set_chunk (self, &fetched_chunk);
     //  Send twice from same object
     zpipes_msg_send_again (self, output);
     zpipes_msg_send (&self, output);
@@ -1227,7 +1237,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    zpipes_msg_set_chunk (self, zchunk_new ("Captcha Diem", 12));
+    zchunk_t *store_chunk = zchunk_new ("Captcha Diem", 12);
+    zpipes_msg_set_chunk (self, &store_chunk);
     //  Send twice from same object
     zpipes_msg_send_again (self, output);
     zpipes_msg_send (&self, output);

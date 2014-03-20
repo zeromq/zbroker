@@ -13,21 +13,12 @@
     * The code generation script that built this file: zproto_codec_c
     ************************************************************************
     
-    Copyright contributors as noted in the AUTHORS file.                    
-    This file is part of zbroker, the ZeroMQ broker project.                
-                                                                            
-    This is free software; you can redistribute it and/or modify it under   
-    the terms of the GNU Lesser General Public License as published by the  
-    Free Software Foundation; either version 3 of the License, or (at your  
-    option) any later version.                                              
-                                                                            
-    This software is distributed in the hope that it will be useful, but    
-    WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABIL-
-    ITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Lesser General     
-    Public License for more details.                                        
-                                                                            
-    You should have received a copy of the GNU Lesser General Public License
-    along with this program. If not, see <http://www.gnu.org/licenses/>.    
+    Copyright contributors as noted in the AUTHORS file.               
+    This file is part of zbroker, the ZeroMQ broker project.           
+                                                                       
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.           
     =========================================================================
 */
 
@@ -99,9 +90,10 @@ void
 
 //  Parse a zpipes_msg from zmsg_t. Returns a new object, or NULL if
 //  the message could not be parsed, or was NULL. If the socket type is
-//  ZMQ_ROUTER, then parses the first frame as a routing_id.
+//  ZMQ_ROUTER, then parses the first frame as a routing_id. Destroys msg
+//  and nullifies the msg refernce.
 zpipes_msg_t *
-    zpipes_msg_decode (zmsg_t *msg, int socket_type);
+    zpipes_msg_decode (zmsg_t **msg_p, int socket_type);
 
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
 //  object or NULL if error. Use when not in control of sending the message.
@@ -222,11 +214,15 @@ uint32_t
 void
     zpipes_msg_set_timeout (zpipes_msg_t *self, uint32_t timeout);
 
-//  Get/set the chunk field
+//  Get a copy of the chunk field
 zchunk_t *
     zpipes_msg_chunk (zpipes_msg_t *self);
+//  Get the chunk field and transfer ownership to caller
+zchunk_t *
+    zpipes_msg_get_chunk (zpipes_msg_t *self);
+//  Set the chunk field, transferring ownership from caller
 void
-    zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t *chunk);
+    zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t **chunk_p);
 
 //  Self test of this class
 int

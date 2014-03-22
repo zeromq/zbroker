@@ -567,7 +567,7 @@ zpipes_msg_send_again (zpipes_msg_t *self, void *output)
 int
 zpipes_msg_send_input (
     void *output,
-    char *pipename)
+    const char *pipename)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT);
     zpipes_msg_set_pipename (self, pipename);
@@ -581,7 +581,7 @@ zpipes_msg_send_input (
 int
 zpipes_msg_send_output (
     void *output,
-    char *pipename)
+    const char *pipename)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
     zpipes_msg_set_pipename (self, pipename);
@@ -607,7 +607,7 @@ zpipes_msg_send_ready (
 int
 zpipes_msg_send_failed (
     void *output,
-    char *reason)
+    const char *reason)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_FAILED);
     zpipes_msg_set_reason (self, reason);
@@ -904,7 +904,7 @@ zpipes_msg_set_id (zpipes_msg_t *self, int id)
 //  --------------------------------------------------------------------------
 //  Return a printable command string
 
-char *
+const char *
 zpipes_msg_command (zpipes_msg_t *self)
 {
     assert (self);
@@ -952,7 +952,7 @@ zpipes_msg_command (zpipes_msg_t *self)
 //  --------------------------------------------------------------------------
 //  Get/set the pipename field
 
-char *
+const char *
 zpipes_msg_pipename (zpipes_msg_t *self)
 {
     assert (self);
@@ -960,7 +960,7 @@ zpipes_msg_pipename (zpipes_msg_t *self)
 }
 
 void
-zpipes_msg_set_pipename (zpipes_msg_t *self, char *format, ...)
+zpipes_msg_set_pipename (zpipes_msg_t *self, const char *format, ...)
 {
     //  Format pipename from provided arguments
     assert (self);
@@ -975,7 +975,7 @@ zpipes_msg_set_pipename (zpipes_msg_t *self, char *format, ...)
 //  --------------------------------------------------------------------------
 //  Get/set the reason field
 
-char *
+const char *
 zpipes_msg_reason (zpipes_msg_t *self)
 {
     assert (self);
@@ -983,7 +983,7 @@ zpipes_msg_reason (zpipes_msg_t *self)
 }
 
 void
-zpipes_msg_set_reason (zpipes_msg_t *self, char *format, ...)
+zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...)
 {
     //  Format reason from provided arguments
     assert (self);

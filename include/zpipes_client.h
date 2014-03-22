@@ -19,7 +19,7 @@ typedef struct _zpipes_client_t zpipes_client_t;
 // @interface
 //  Constructor
 CZMQ_EXPORT zpipes_client_t *
-    zpipes_client_new (char *broker_name, char *pipe_name);
+    zpipes_client_new (const char *broker_name, const char *pipe_name);
 
 //  Destructor
 CZMQ_EXPORT void

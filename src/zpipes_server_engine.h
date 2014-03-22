@@ -498,6 +498,8 @@ static void
 s_server_control_message (s_server_t *self)
 {
     zmsg_t *msg = zmsg_recv (self->pipe);
+    zclock_log ("API command:");
+    zmsg_dump (msg);
     char *method = zmsg_popstr (msg);
     if (streq (method, "BIND")) {
         char *endpoint = zmsg_popstr (msg);
@@ -563,6 +565,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send ready
                         zclock_log ("%6d:         $ send ready", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_READY);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -586,6 +590,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send ready
                         zclock_log ("%6d:         $ send ready", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_READY);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -604,6 +610,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send failed
                         zclock_log ("%6d:         $ send failed", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -644,6 +652,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send closed
                         zclock_log ("%6d:         $ send closed", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_CLOSED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -660,6 +670,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send failed
                         zclock_log ("%6d:         $ send failed", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -693,6 +705,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send fetched
                         zclock_log ("%6d:         $ send fetched", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FETCHED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -716,6 +730,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send end_of_pipe
                         zclock_log ("%6d:         $ send end_of_pipe", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_END_OF_PIPE);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -739,6 +755,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send timeout
                         zclock_log ("%6d:         $ send timeout", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_TIMEOUT);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -757,6 +775,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send failed
                         zclock_log ("%6d:         $ send failed", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -785,6 +805,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send stored
                         zclock_log ("%6d:         $ send stored", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_STORED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -808,6 +830,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send closed
                         zclock_log ("%6d:         $ send closed", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_CLOSED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -824,6 +848,8 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         //  send failed
                         zclock_log ("%6d:         $ send failed", client->client_id);
                         zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zclock_log ("%6d: Send message to client", client->client_id);
+                        zpipes_msg_dump (client->client.reply);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -876,6 +902,8 @@ s_server_client_message (s_server_t *self)
         zhash_freefn (self->clients, hashkey, s_client_free);
     }
     free (hashkey);
+    zclock_log ("%6d: Client message", client->client_id);
+    zpipes_msg_dump (request);
 
     //  Any input from client counts as activity
     client->expires_at = zclock_time () + self->timeout;
@@ -893,6 +921,7 @@ s_server_client_message (s_server_t *self)
 static void
 s_server_task (void *args, zctx_t *ctx, void *pipe)
 {
+    zclock_log ("Initialize background server task");
     s_server_t *self = s_server_new (ctx, pipe);
     assert (self);
     zstr_send (self->pipe, "OK");

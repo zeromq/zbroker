@@ -24,9 +24,7 @@ int main (int argc, char *argv [])
     printf ("Running self tests...\n");
     zpipes_msg_test (verbose);
     zpipes_server_test (verbose);
-//     zpipes_agent_test (verbose);
-//     zpipes_test (verbose);
-//     zpipes_client_test (verbose);
+    zpipes_client_test (verbose);
     printf ("Tests passed OK\n");
     return 0;
 }

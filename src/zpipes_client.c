@@ -17,7 +17,8 @@
 @end
 */
 
-#include "zpipes_classes.h"
+#include "../include/zpipes.h"
+#include "../include/zpipes_msg.h"
 
 //  ---------------------------------------------------------------------
 //  Structure of zpipes_client class
@@ -29,16 +30,26 @@ struct _zpipes_client_t {
 };
 
 
+static void
+s_expect_reply (zpipes_client_t *self, int message_id)
+{
+    zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
+    assert (reply);
+    //  Current behavior when faced with unexpected reply is to die
+    assert (zpipes_msg_id (reply) == message_id);
+    zpipes_msg_destroy (&reply);
+}
+
+
 //  ---------------------------------------------------------------------
 //  Constructor
 
 zpipes_client_t *
-zpipes_client_new (char *broker_name, char *zpipes_client_name)
+zpipes_client_new (const char *broker_name, const char *pipe_name)
 {
     //  Create new pipe API instance
     zpipes_client_t *self = (zpipes_client_t *) zmalloc (sizeof (zpipes_client_t));
     assert (self);
-    self->name = strdup (zpipes_client_name);
 
     //  Create dealer socket and connect to broker IPC port
     self->ctx = zctx_new ();
@@ -46,12 +57,11 @@ zpipes_client_new (char *broker_name, char *zpipes_client_name)
     if (self->dealer) {
         int rc = zsocket_connect (self->dealer, "ipc://@/zpipes/%s", broker_name);
         assert (rc == 0);
-
-        //  Open the pipe and wait for broker confirmation
-        zstr_sendm (self->dealer, "OPEN");
-        zstr_send (self->dealer, self->name);
-        char *ack = zstr_recv (self->dealer);
-        free (ack);
+        if (*pipe_name == '>')
+            zpipes_msg_send_output (self->dealer, pipe_name + 1);
+        else
+            zpipes_msg_send_input (self->dealer, pipe_name);
+        s_expect_reply (self, ZPIPES_MSG_READY);
     }
     return self;
 }
@@ -67,15 +77,10 @@ zpipes_client_destroy (zpipes_client_t **self_p)
     if (*self_p) {
         zpipes_client_t *self = *self_p;
         if (self->dealer) {
-            //  Close the pipe and wait for broker confirmation
-            zstr_sendm (self->dealer, "CLOSE");
-            zstr_send (self->dealer, self->name);
-            char *ack = zstr_recv (self->dealer);
-            free (ack);
+            zpipes_msg_send_close (self->dealer);
+            s_expect_reply (self, ZPIPES_MSG_CLOSED);
         }
-        //  Destroy this pipe API instance
         zctx_destroy (&self->ctx);
-        free (self->name);
         free (self);
         *self_p = NULL;
     }
@@ -90,12 +95,11 @@ zpipes_client_write (zpipes_client_t *self, void *data, size_t size)
 {
     assert (self);
     if (self->dealer) {
-        //  Send chunk to pipe and wait for broker confirmation
-        zstr_sendm (self->dealer, "WRITE");
-        zstr_sendm (self->dealer, self->name);
-        zmq_send (self->dealer, data, size, 0);
-        char *ack = zstr_recv (self->dealer);
-        free (ack);
+        zchunk_t *chunk = zchunk_new (data, size);
+        assert (chunk);
+        zpipes_msg_send_store (self->dealer, chunk);
+        zchunk_destroy (&chunk);
+        s_expect_reply (self, ZPIPES_MSG_STORED);
     }
 }
 
@@ -109,10 +113,19 @@ zpipes_client_read (zpipes_client_t *self, void *data, size_t max_size)
 {
     assert (self);
     if (self->dealer) {
-        zstr_sendm (self->dealer, "READ");
-        zstr_send (self->dealer, self->name);
-        int rc = zmq_recv (self->dealer, data, max_size, 0);
-        return (size_t) rc;
+        //  Use timeout of 200 msecs for now
+        zpipes_msg_send_fetch (self->dealer, 200);
+        zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
+        assert (reply);
+        assert (zpipes_msg_id (reply) == ZPIPES_MSG_FETCHED);
+        //  Return chunk data
+        zchunk_t *chunk = zpipes_msg_chunk (reply);
+        size_t bytes = zchunk_size (chunk);
+        if (bytes > max_size)
+            bytes = max_size;
+        memcpy (data, zchunk_data (chunk), bytes);
+        zpipes_msg_destroy (&reply);
+        return bytes;
     }
     else
         return 0;
@@ -127,28 +140,28 @@ zpipes_client_test (bool verbose)
 {
     printf (" * zpipes_client: ");
     //  @selftest
-    zpipes_t *broker = zpipes_new ("local");
+    zpipes_server_t *server = zpipes_server_new ();
+    zpipes_server_bind (server, "ipc://@/zpipes/local");
 
-    zpipes_client_t *pitcher = zpipes_client_new ("local", "shared pipe");
-    zpipes_client_t *catcher = zpipes_client_new ("local", "shared pipe");
+    zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");
+    zpipes_client_t *writer = zpipes_client_new ("local", ">test pipe");
 
-    zpipes_client_write (pitcher, "CHUNK1", 6);
-    zpipes_client_write (pitcher, "CHUNK2", 6);
-    zpipes_client_write (pitcher, "CHUNK3", 6);
+    zpipes_client_write (writer, "CHUNK1", 6);
+    zpipes_client_write (writer, "CHUNK2", 6);
+    zpipes_client_write (writer, "CHUNK3", 6);
 
     byte buffer [6];
     size_t bytes;
-    bytes = zpipes_client_read (catcher, buffer, 6);
+    bytes = zpipes_client_read (reader, buffer, 6);
     assert (bytes == 6);
-    bytes = zpipes_client_read (catcher, buffer, 6);
+    bytes = zpipes_client_read (reader, buffer, 6);
     assert (bytes == 6);
-    bytes = zpipes_client_read (catcher, buffer, 6);
+    bytes = zpipes_client_read (reader, buffer, 6);
     assert (bytes == 6);
 
-    zpipes_client_destroy (&pitcher);
-    zpipes_client_destroy (&catcher);
-
-    zpipes_destroy (&broker);
+    zpipes_client_destroy (&writer);
+    zpipes_client_destroy (&reader);
+    zpipes_server_destroy (&server);
 
     //  @end
     printf ("OK\n");

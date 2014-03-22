@@ -123,12 +123,12 @@ int
 //  Send the INPUT to the output in one step
 int
     zpipes_msg_send_input (void *output,
-        char *pipename);
+        const char *pipename);
     
 //  Send the OUTPUT to the output in one step
 int
     zpipes_msg_send_output (void *output,
-        char *pipename);
+        const char *pipename);
     
 //  Send the READY to the output in one step
 int
@@ -137,7 +137,7 @@ int
 //  Send the FAILED to the output in one step
 int
     zpipes_msg_send_failed (void *output,
-        char *reason);
+        const char *reason);
     
 //  Send the FETCH to the output in one step
 int
@@ -193,20 +193,20 @@ int
     zpipes_msg_id (zpipes_msg_t *self);
 void
     zpipes_msg_set_id (zpipes_msg_t *self, int id);
-char *
+const char *
     zpipes_msg_command (zpipes_msg_t *self);
 
 //  Get/set the pipename field
-char *
+const char *
     zpipes_msg_pipename (zpipes_msg_t *self);
 void
-    zpipes_msg_set_pipename (zpipes_msg_t *self, char *format, ...);
+    zpipes_msg_set_pipename (zpipes_msg_t *self, const char *format, ...);
 
 //  Get/set the reason field
-char *
+const char *
     zpipes_msg_reason (zpipes_msg_t *self);
 void
-    zpipes_msg_set_reason (zpipes_msg_t *self, char *format, ...);
+    zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...);
 
 //  Get/set the timeout field
 uint32_t

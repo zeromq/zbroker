@@ -20,7 +20,4 @@
 #include "../include/zpipes_server.h"
 #include "../include/zpipes_client.h"
 
-//  Internal API
-#include "zpipes_agent.h"
-
 #endif

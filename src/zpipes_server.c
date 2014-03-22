@@ -39,12 +39,6 @@ struct _server_t {
 static int
 server_initialize (server_t *self)
 {
-    //  Get name and bind point via API
-//     self->name = "default";
-    //  Bind router socket to server IPC command interface
-    //  We're using abstract namespaces, assuming Linux for now
-//     int rc = zsocket_bind (self->router, "ipc://@/zpipes/%s", self->name);
-//     assert (rc == 0);
     self->pipes = zhash_new ();
     return 0;
 }
@@ -71,7 +65,7 @@ typedef struct {
 static void s_delete_pipe (void *argument);
 
 static pipe_t *
-pipe_new (server_t *server, char *name)
+pipe_new (server_t *server, const char *name)
 {
     pipe_t *self = (pipe_t *) zmalloc (sizeof (pipe_t));
     self->name = strdup (name);
@@ -145,7 +139,7 @@ client_terminate (client_t *self)
 static void
 open_pipe_for_input (client_t *self)
 {
-    char *pipename = zpipes_msg_pipename (self->request);
+    const char *pipename = zpipes_msg_pipename (self->request);
     self->pipe = (pipe_t *) zhash_lookup (self->server->pipes, pipename);
     if (!self->pipe)
         self->pipe = pipe_new (self->server, pipename);
@@ -161,7 +155,7 @@ open_pipe_for_input (client_t *self)
 static void
 open_pipe_for_output (client_t *self)
 {
-    char *pipename = zpipes_msg_pipename (self->request);
+    const char *pipename = zpipes_msg_pipename (self->request);
     self->pipe = (pipe_t *) zhash_lookup (self->server->pipes, pipename);
     if (!self->pipe)
         self->pipe = pipe_new (self->server, pipename);

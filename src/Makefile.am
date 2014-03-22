@@ -9,11 +9,9 @@ include_HEADERS = \
 	../include/zpipes_client.h
 
 libzpipes_la_SOURCES = \
-	zpipes.c \
 	zpipes_msg.c \
 	zpipes_server.c \
-	zpipes_server_engine.h \
-	zpipes_agent.c
+	zpipes_server_engine.h
 	
 libzpipesclient_la_SOURCES = \
 	zpipes_client.c

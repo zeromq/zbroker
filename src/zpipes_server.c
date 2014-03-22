@@ -23,17 +23,21 @@
 #include "../include/zpipes_server.h"
 
 //  ---------------------------------------------------------------------
+//  Forward declarations for the two main classes we use here
+
+typedef struct _server_t server_t;
+typedef struct _client_t client_t;
+
 //  This structure defines the context for each running server. Store
 //  whatever properties and structures you need for the server.
-//  
 
-typedef struct {
+struct _server_t {
     char *name;                 //  Server public name
     zhash_t *pipes;             //  Collection of pipes
-} server_t;
+};
 
 static int
-server_alloc (server_t *self)
+server_initialize (server_t *self)
 {
     //  Get name and bind point via API
 //     self->name = "default";
@@ -46,7 +50,7 @@ server_alloc (server_t *self)
 }
 
 static void
-server_free (server_t *self)
+server_terminate (server_t *self)
 {
     zhash_destroy (&self->pipes);
 }
@@ -60,7 +64,8 @@ typedef struct {
     char *name;                 //  Name of pipe
     zlist_t *queue;             //  Pipe holds a queue of zchunk_t objects
     size_t links;               //  Number of callers that have opened pipe
-    zframe_t *pending;          //  Routing ID of pending reader, if any
+    client_t *reader;           //  Pending reader, if any
+    bool terminated;            //  Pipe closed by writer?
 } pipe_t;
 
 static void s_delete_pipe (void *argument);
@@ -88,7 +93,6 @@ pipe_destroy (pipe_t **self_p)
             zchunk_destroy (&chunk);
             chunk = (zchunk_t *) zlist_next (self->queue);
         }
-        zframe_destroy (&self->pending);
         zlist_destroy (&self->queue);
         free (self->name);
         free (self);
@@ -109,7 +113,7 @@ s_delete_pipe (void *argument)
 //  This structure defines the state for each client connection. It will
 //  be passed to each action in the 'self' argument.
 
-typedef struct {
+struct _client_t {
     //  These properties must always be present in the client_t
     server_t *server;           //  Reference to parent server
     zpipes_msg_t *request;      //  Last received request
@@ -117,16 +121,16 @@ typedef struct {
     //  These properties are specific for this application
     pipe_t *pipe;               //  Current pipe, if any
     bool writing;               //  Are we writing to pipe?
-} client_t;
+};
 
 static int
-client_alloc (client_t *self)
+client_initialize (client_t *self)
 {
     return 0;
 }
 
 static void
-client_free (client_t *self)
+client_terminate (client_t *self)
 {
 }
 
@@ -167,16 +171,25 @@ open_pipe_for_output (client_t *self)
 
 
 //  --------------------------------------------------------------------------
-//  store_chunk_to_pipe
+//  expect_chunk_on_pipe
 //
 
 static void
-store_chunk_to_pipe (client_t *self)
+expect_chunk_on_pipe (client_t *self)
 {
-    //  State machine guarantees we're in a valid state for writing
-    assert (self->pipe);
-    assert (self->writing);
-    zlist_append (self->pipe->queue, zpipes_msg_get_chunk (self->request));
+    if (zlist_size (self->pipe->queue))
+        set_next_event (self, have_chunk_event);
+    else
+    if (self->pipe->terminated)
+        set_next_event (self, pipe_terminated_event);
+    else {
+        assert (self->pipe->reader == NULL);
+        self->pipe->reader = self;
+        if (zpipes_msg_timeout (self->request))
+            set_wakeup_event (self,
+                              zpipes_msg_timeout (self->request),
+                              timeout_expired_event);
+    }
 }
 
 
@@ -191,18 +204,41 @@ fetch_chunk_from_pipe (client_t *self)
     assert (self->pipe);
     assert (!self->writing);
 
-    //  If pipe has content, take next chunk and return it
+    //  Pipe must have content at this stage
     zchunk_t *chunk = (zchunk_t *) zlist_pop (self->pipe->queue);
-    if (chunk)
-        zpipes_msg_set_chunk (self->reply, &chunk);
-    else
-        raise_exception (self, timeout_event);
-    //  How to track pending writes?
-    //  Notification events...?
-//     else
-//         //  Pipe is empty, mark pending delivery to this caller
-//         pipe->pending = caller_rid;
-        //  want to send notification event to pending client
+    assert (chunk);
+    zpipes_msg_set_chunk (self->reply, &chunk);
+}
+
+
+//  --------------------------------------------------------------------------
+//  store_chunk_to_pipe
+//
+
+static void
+store_chunk_to_pipe (client_t *self)
+{
+    //  State machine guarantees we're in a valid state for writing
+    assert (self->pipe);
+    assert (self->writing);
+
+    //  Always store chunk on list, even to pass to pending reader
+    zlist_append (self->pipe->queue, zpipes_msg_get_chunk (self->request));
+    if (self->pipe->reader) {
+        send_event (self->pipe->reader, have_chunk_event);
+        assert (zlist_size (self->pipe->queue) == 0);
+    }
+}
+
+
+//  --------------------------------------------------------------------------
+//  clear_pending_reads
+//
+
+static void
+clear_pending_reads (client_t *self)
+{
+    self->pipe->reader = NULL;
 }
 
 
@@ -215,14 +251,30 @@ close_pipe (client_t *self)
 {
     assert (self->pipe);
     self->pipe->links--;
-    //  Delete unused pipes if empty
+    
+    //  Delete pipe if unused & empty
     if (self->pipe->links == 0 && zlist_size (self->pipe->queue) == 0)
         zhash_delete (self->server->pipes, self->pipe->name);
+    else
+    if (self->writing) {
+        self->pipe->terminated = true;
+        if (self->pipe->reader)
+            send_event (self->pipe->reader, pipe_terminated_event);
+    }
 }
 
 
 //  --------------------------------------------------------------------------
 //  Selftest
+
+static void
+s_expect_reply (void *dealer, int message_id)
+{
+    zpipes_msg_t *reply = zpipes_msg_recv (dealer);
+    assert (reply);
+    assert (zpipes_msg_id (reply) == message_id);
+    zpipes_msg_destroy (&reply);
+}
 
 void
 zpipes_server_test (bool verbose)
@@ -244,56 +296,43 @@ zpipes_server_test (bool verbose)
     assert (reader);
     zsocket_connect (reader, "tcp://127.0.0.1:5670");
     
-    zpipes_msg_t *reply;
-
-    //  Minimal hello world test
+    //  Simple reader/writer test
     zpipes_msg_send_output (writer, "hello");
-    reply = zpipes_msg_recv (writer);
-    assert (reply);
-    assert (zpipes_msg_id (reply) == ZPIPES_MSG_READY);
-    zpipes_msg_destroy (&reply);
+    s_expect_reply (writer, ZPIPES_MSG_READY);
     
+    zpipes_msg_send_input (reader, "hello");
+    s_expect_reply (reader, ZPIPES_MSG_READY);
+    
+    //  Pipeline three read requests
+    zpipes_msg_send_fetch (reader, 100);
+    zpipes_msg_send_fetch (reader, 100);
+    zpipes_msg_send_fetch (reader, 100);
+
+    //  First will return with a timeout
+    s_expect_reply (reader, ZPIPES_MSG_TIMEOUT);
+
+    //  Store a chunk
     zchunk_t *chunk = zchunk_new ("World", 5);
     assert (chunk);
     zpipes_msg_send_store (writer, chunk);
     zchunk_destroy (&chunk);
-    reply = zpipes_msg_recv (writer);
-    assert (reply);
-    assert (zpipes_msg_id (reply) == ZPIPES_MSG_STORED);
-    zpipes_msg_destroy (&reply);
+    s_expect_reply (writer, ZPIPES_MSG_STORED);
     
+    //  Second will return with a chunk
+    s_expect_reply (reader, ZPIPES_MSG_FETCHED);
+
+    //  Close writer
     zpipes_msg_send_close (writer);
-    reply = zpipes_msg_recv (writer);
-    assert (reply);
-    assert (zpipes_msg_id (reply) == ZPIPES_MSG_CLOSED);
-    zpipes_msg_destroy (&reply);
+    s_expect_reply (writer, ZPIPES_MSG_CLOSED);
+    
+    //  Third will return empty
+    s_expect_reply (reader, ZPIPES_MSG_END_OF_PIPE);
 
-    zpipes_msg_send_input (reader, "hello");
-    reply = zpipes_msg_recv (reader);
-    assert (reply);
-    assert (zpipes_msg_id (reply) == ZPIPES_MSG_READY);
-    zpipes_msg_destroy (&reply);
-
-    zpipes_msg_send_fetch (reader, 0);
-    reply = zpipes_msg_recv (reader);
-    assert (reply);
-    assert (zpipes_msg_id (reply) == ZPIPES_MSG_FETCHED);
-    zpipes_msg_destroy (&reply);
-
-    zpipes_msg_send_fetch (reader, 100);
-    reply = zpipes_msg_recv (reader);
-    assert (reply);
-    assert (zpipes_msg_id (reply) == ZPIPES_MSG_TIMEOUT);
-    zpipes_msg_destroy (&reply);
-
+    //  Close reader
     zpipes_msg_send_close (reader);
-    reply = zpipes_msg_recv (reader);
-    assert (reply);
-    assert (zpipes_msg_id (reply) == ZPIPES_MSG_CLOSED);
-    zpipes_msg_destroy (&reply);
+    s_expect_reply (reader, ZPIPES_MSG_CLOSED);
 
     zpipes_server_destroy (&self);
-    
     zctx_destroy (&ctx);
     //  @end
 

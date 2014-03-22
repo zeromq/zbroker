@@ -4,12 +4,9 @@ The zbroker offers a broker container for multiple ZeroMQ-based messaging servic
 
 * zpipes - reliable, distributed named pipes
 
-Other planned/potential services are:
-
-* Majordomo - service-oriented RPC.
-* Clone - distributed key-value storage.
-
 ## zpipes Overview
+
+*This section is out of date and needs rewriting.*
 
 The zpipes service provides a reliable named pipes service. A pipe is a one-directional stream of data "chunks" between applications.
 

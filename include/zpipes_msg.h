@@ -44,7 +44,7 @@
     FETCHED - Have data from pipe
         chunk               chunk       Chunk of data
 
-    EMPTY - Pipe is closed, no more data
+    END_OF_PIPE - Pipe is closed, no more data
 
     TIMEOUT - Get or put ended with timeout
 
@@ -65,7 +65,7 @@
 #define ZPIPES_MSG_FAILED                   4
 #define ZPIPES_MSG_FETCH                    5
 #define ZPIPES_MSG_FETCHED                  6
-#define ZPIPES_MSG_EMPTY                    7
+#define ZPIPES_MSG_END_OF_PIPE              7
 #define ZPIPES_MSG_TIMEOUT                  8
 #define ZPIPES_MSG_STORE                    9
 #define ZPIPES_MSG_STORED                   10
@@ -149,9 +149,9 @@ int
     zpipes_msg_send_fetched (void *output,
         zchunk_t *chunk);
     
-//  Send the EMPTY to the output in one step
+//  Send the END_OF_PIPE to the output in one step
 int
-    zpipes_msg_send_empty (void *output);
+    zpipes_msg_send_end_of_pipe (void *output);
     
 //  Send the TIMEOUT to the output in one step
 int

@@ -21,8 +21,8 @@
     ZPIPES_MAKE_VERSION(ZPIPES_VERSION_MAJOR, ZPIPES_VERSION_MINOR, ZPIPES_VERSION_PATCH)
 
 #include <czmq.h>
-#if CZMQ_VERSION < 20100
-#   error "zpipes needs CZMQ/2.1.0 or later"
+#if CZMQ_VERSION < 20200
+#   error "zpipes needs CZMQ/2.2.0 or later"
 #endif
 
 #include <zyre.h>

@@ -36,7 +36,7 @@ The following ABNF grammar defines the ZPIPES protocol:
     chunk           = chunk                 ; Chunk of data
 
     ;         Pipe is closed, no more data
-    C:empty         = signature %d7
+    C:end_of_pipe   = signature %d7
 
     ;         Get or put ended with timeout
     C:timeout       = signature %d8

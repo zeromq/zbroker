@@ -287,7 +287,7 @@ zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
             }
             break;
 
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
 
         case ZPIPES_MSG_TIMEOUT:
@@ -411,7 +411,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 frame_size += zchunk_size (self->chunk);
             break;
             
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
             
         case ZPIPES_MSG_TIMEOUT:
@@ -488,7 +488,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 PUT_NUMBER4 (0);    //  Empty chunk
             break;
 
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
 
         case ZPIPES_MSG_TIMEOUT:
@@ -645,13 +645,13 @@ zpipes_msg_send_fetched (
 
 
 //  --------------------------------------------------------------------------
-//  Send the EMPTY to the socket in one step
+//  Send the END_OF_PIPE to the socket in one step
 
 int
-zpipes_msg_send_empty (
+zpipes_msg_send_end_of_pipe (
     void *output)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_EMPTY);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_END_OF_PIPE);
     return zpipes_msg_send (&self, output);
 }
 
@@ -756,7 +756,7 @@ zpipes_msg_dup (zpipes_msg_t *self)
             copy->chunk = self->chunk? zchunk_dup (self->chunk): NULL;
             break;
 
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
 
         case ZPIPES_MSG_TIMEOUT:
@@ -832,8 +832,8 @@ zpipes_msg_dump (zpipes_msg_t *self)
             printf ("    }\n");
             break;
             
-        case ZPIPES_MSG_EMPTY:
-            puts ("EMPTY:");
+        case ZPIPES_MSG_END_OF_PIPE:
+            puts ("END_OF_PIPE:");
             break;
             
         case ZPIPES_MSG_TIMEOUT:
@@ -927,8 +927,8 @@ zpipes_msg_command (zpipes_msg_t *self)
         case ZPIPES_MSG_FETCHED:
             return ("FETCHED");
             break;
-        case ZPIPES_MSG_EMPTY:
-            return ("EMPTY");
+        case ZPIPES_MSG_END_OF_PIPE:
+            return ("END_OF_PIPE");
             break;
         case ZPIPES_MSG_TIMEOUT:
             return ("TIMEOUT");
@@ -1194,7 +1194,7 @@ zpipes_msg_test (bool verbose)
         assert (memcmp (zchunk_data (zpipes_msg_chunk (self)), "Captcha Diem", 12) == 0);
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_EMPTY);
+    self = zpipes_msg_new (ZPIPES_MSG_END_OF_PIPE);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);

@@ -1,14 +1,14 @@
-lib_LTLIBRARIES = libzpipes.la libzpipesclient.la
+lib_LTLIBRARIES = libzbroker.la libzpipesclient.la
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = libzpipes.pc libzpipesclient.pc
+pkgconfig_DATA = libzbroker.pc libzpipesclient.pc
 
 include_HEADERS = \
-	../include/zpipes.h \
+	../include/zbroker.h \
 	../include/zpipes_msg.h \
 	../include/zpipes_client.h
 
-libzpipes_la_SOURCES = \
+libzbroker_la_SOURCES = \
 	zpipes_msg.c \
 	zpipes_server.c \
 	zpipes_server_engine.h
@@ -18,15 +18,17 @@ libzpipesclient_la_SOURCES = \
 
 AM_CFLAGS = -g
 AM_CPPFLAGS = -I$(top_srcdir)/include
-bin_PROGRAMS = zpipes_selftest
+bin_PROGRAMS = zbroker zbroker_selftest
 
-zpipes_selftest_LDADD = libzpipes.la libzpipesclient.la
-zpipes_selftest_SOURCES = zpipes_selftest.c
+zbroker_selftest_LDADD = libzbroker.la libzpipesclient.la
+# zbroker_selftest_SOURCES = zbroker_selftest.c
 
-libzpipes_la_LDFLAGS = -version-info @LTVER@
+zbroker_LDADD = libzbroker.la
+
+libzbroker_la_LDFLAGS = -version-info @LTVER@
 libzpipesclient_la_LDFLAGS = -version-info @CLIENT_LTVER@
 
-TESTS = zpipes_selftest
+TESTS = zbroker_selftest
 
 # Produce generated models; do this manually in src directory
 code:

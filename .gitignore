@@ -35,13 +35,13 @@ libtool
 .libs
 src/Makefile
 src/Makefile.in
-src/zpipes
+src/zbroker
 src/platform.h
 src/platform.h.in
 src/platform.h.in~
 src/stamp-h1
 src/test-suite.log
-src/zpipes_selftest
+src/zbroker_selftest
 *.la
 *.pc
 

@@ -2,11 +2,11 @@
 # Process this file with autoconf to produce a configure script.
 AC_PREREQ(2.61)
 #
-# The version number is extracted from include/zpipes.h using
+# The version number is extracted from include/zbroker.h using
 # the version.sh script. Hence, it should be updated there.
 # The version in git should reflect the *next* version planned.
 #
-AC_INIT([zpipes],[m4_esyscmd([./version.sh zpipes])],[zeromq-dev@lists.zeromq.org])
+AC_INIT([zbroker],[m4_esyscmd([./version.sh zbroker])],[zeromq-dev@lists.zeromq.org])
 
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR(config)
@@ -19,11 +19,11 @@ PV_MAJOR=`echo $PACKAGE_VERSION | cut -d . -f 1`
 PV_MINOR=`echo $PACKAGE_VERSION | cut -d . -f 2`
 PV_PATCH=`echo $PACKAGE_VERSION | cut -d . -f 3`
 AC_DEFINE_UNQUOTED([PACKAGE_VERSION_MAJOR],[$PV_MAJOR],
-    [ZPIPES major version])
+    [ZBROKER major version])
 AC_DEFINE_UNQUOTED([PACKAGE_VERSION_MINOR],[$PV_MINOR],
-    [ZPIPES minor version])
+    [ZBROKER minor version])
 AC_DEFINE_UNQUOTED([PACKAGE_VERSION_PATCH],[$PV_PATCH],
-    [ZPIPES patchlevel])
+    [ZBROKER patchlevel])
 # This lets us use PACKAGE_VERSION in Makefiles
 AC_SUBST(PACKAGE_VERSION)
 
@@ -34,17 +34,17 @@ AC_SUBST(PACKAGE_VERSION)
 # exactly what you're doing, and have read and understand
 # http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html
 #
-# libzpipes -version-info
+# libzbroker -version-info
 LTVER="0:0:0"
 
-# libzpipes_client -version-info
+# libzpipesclient -version-info
 CLIENT_LTVER="0:0:0"
 
 AC_SUBST(LTVER)
 AC_SUBST(CLIENT_LTVER)
 
 # Capture c flags
-ZPIPES_ORIG_CFLAGS="${CFLAGS:-none}"
+ZBROKER_ORIG_CFLAGS="${CFLAGS:-none}"
 
 # Checks for programs
 AC_PROG_CC
@@ -58,13 +58,13 @@ AC_PROG_AWK
 # Code coverage
 AC_ARG_WITH(gcov, [AS_HELP_STRING([--with-gcov=yes/no],
                   [With GCC Code Coverage reporting.])],
-                  [ZPIPES_GCOV="$withval"])
+                  [ZBROKER_GCOV="$withval"])
 
-if test "x${ZPIPES_GCOV}" == "xyes"; then
+if test "x${ZBROKER_GCOV}" == "xyes"; then
     CFLAGS="-O0 -g -fprofile-arcs -ftest-coverage"
 
-    if test "x${ZPIPES_ORIG_CFLAGS}" != "xnone"; then
-        CFLAGS="${CFLAGS} ${ZPIPES_ORIG_CFLAGS}"
+    if test "x${ZBROKER_ORIG_CFLAGS}" != "xnone"; then
+        CFLAGS="${CFLAGS} ${ZBROKER_ORIG_CFLAGS}"
     fi
 fi
 
@@ -146,33 +146,33 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([#include <zyre.h>],
 
 
 # Platform specific checks
-zpipes_on_mingw32="no"
+zbroker_on_mingw32="no"
 
 # Host speciffic checks
 AC_CANONICAL_HOST
 
 # Determine whether or not documentation should be built and installed.
-zpipes_build_doc="yes"
-zpipes_install_man="yes"
+zbroker_build_doc="yes"
+zbroker_install_man="yes"
 
 # Check for asciidoc and xmlto and don't build the docs if these are not installed.
-AC_CHECK_PROG(zpipes_have_asciidoc, asciidoc, yes, no)
-AC_CHECK_PROG(zpipes_have_xmlto, xmlto, yes, no)
-if test "x$zpipes_have_asciidoc" = "xno" -o "x$zpipes_have_xmlto" = "xno"; then
-    zpipes_build_doc="no"
+AC_CHECK_PROG(zbroker_have_asciidoc, asciidoc, yes, no)
+AC_CHECK_PROG(zbroker_have_xmlto, xmlto, yes, no)
+if test "x$zbroker_have_asciidoc" = "xno" -o "x$zbroker_have_xmlto" = "xno"; then
+    zbroker_build_doc="no"
     # Tarballs built with 'make dist' ship with prebuilt documentation.
-    if ! test -f doc/zpipes.7; then
-        zpipes_install_man="no"
-        AC_MSG_WARN([You are building an unreleased version of libzpipes and asciidoc or xmlto are not installed.])
+    if ! test -f doc/zbroker.7; then
+        zbroker_install_man="no"
+        AC_MSG_WARN([You are building an unreleased version of zbroker and asciidoc or xmlto are not installed.])
         AC_MSG_WARN([Documentation will not be built and manual pages will not be installed.])
     fi
 fi
 AC_MSG_CHECKING([whether to build documentation])
-AC_MSG_RESULT([$zpipes_build_doc])
+AC_MSG_RESULT([$zbroker_build_doc])
 AC_MSG_CHECKING([whether to install manpages])
-AC_MSG_RESULT([$zpipes_install_man])
+AC_MSG_RESULT([$zbroker_install_man])
 
-# Set some default features required by libzpipes code.
+# Set some default features required by zbroker code.
 CPPFLAGS="-D_REENTRANT -D_THREAD_SAFE $CPPFLAGS"
 
 # OS-specific tests
@@ -180,56 +180,56 @@ case "${host_os}" in
     *linux*)
         # Define on Linux to enable all library features
         CPPFLAGS="-D_GNU_SOURCE -DLINUX $CPPFLAGS"
-        AC_DEFINE(ZPIPES_HAVE_LINUX, 1, [Have Linux OS])
+        AC_DEFINE(ZBROKER_HAVE_LINUX, 1, [Have Linux OS])
         ;;
     *solaris*)
         # Define on Solaris to enable all library features
         CPPFLAGS="-D_PTHREADS $CPPFLAGS"
-        AC_DEFINE(ZPIPES_HAVE_SOLARIS, 1, [Have Solaris OS])
+        AC_DEFINE(ZBROKER_HAVE_SOLARIS, 1, [Have Solaris OS])
         CFLAGS="${CFLAGS} -lsocket -lssp"
         ;;
     *freebsd*)
         # Define on FreeBSD to enable all library features
         CPPFLAGS="-D__BSD_VISIBLE $CPPFLAGS"
-        AC_DEFINE(ZPIPES_HAVE_FREEBSD, 1, [Have FreeBSD OS])
+        AC_DEFINE(ZBROKER_HAVE_FREEBSD, 1, [Have FreeBSD OS])
         ;;
     *darwin*)
         # Define on Darwin to enable all library features
         CPPFLAGS="-D_DARWIN_C_SOURCE $CPPFLAGS"
-        AC_DEFINE(ZPIPES_HAVE_OSX, 1, [Have DarwinOSX OS])
+        AC_DEFINE(ZBROKER_HAVE_OSX, 1, [Have DarwinOSX OS])
         ;;
     *netbsd*)
         # Define on NetBSD to enable all library features
         CPPFLAGS="-D_NETBSD_SOURCE $CPPFLAGS"
-        AC_DEFINE(ZPIPES_HAVE_NETBSD, 1, [Have NetBSD OS])
+        AC_DEFINE(ZBROKER_HAVE_NETBSD, 1, [Have NetBSD OS])
         ;;
     *openbsd*)
         # Define on OpenBSD to enable all library features
         CPPFLAGS="-D_BSD_SOURCE $CPPFLAGS"
-        AC_DEFINE(ZPIPES_HAVE_OPENBSD, 1, [Have OpenBSD OS])
+        AC_DEFINE(ZBROKER_HAVE_OPENBSD, 1, [Have OpenBSD OS])
         ;;
     *nto-qnx*)
-        AC_DEFINE(ZPIPES_HAVE_QNXNTO, 1, [Have QNX Neutrino OS])
+        AC_DEFINE(ZBROKER_HAVE_QNXNTO, 1, [Have QNX Neutrino OS])
         ;;
     *aix*)
-        AC_DEFINE(ZPIPES_HAVE_AIX, 1, [Have AIX OS])
+        AC_DEFINE(ZBROKER_HAVE_AIX, 1, [Have AIX OS])
         ;;
     *hpux*)
         # Define on HP-UX to enable all library features
         CPPFLAGS="-D_POSIX_C_SOURCE=200112L"
-        AC_DEFINE(ZPIPES_HAVE_HPUX, 1, [Have HPUX OS])
+        AC_DEFINE(ZBROKER_HAVE_HPUX, 1, [Have HPUX OS])
         ;;
     *mingw32*)
-        AC_DEFINE(ZPIPES_HAVE_WINDOWS, 1, [Have Windows OS])
-        AC_DEFINE(ZPIPES_HAVE_MINGW32, 1, [Have MinGW32])
+        AC_DEFINE(ZBROKER_HAVE_WINDOWS, 1, [Have Windows OS])
+        AC_DEFINE(ZBROKER_HAVE_MINGW32, 1, [Have MinGW32])
         AC_CHECK_HEADERS(windows.h)
-        zpipes_on_mingw32="yes"
-        zpipes_install_man="no"
+        zbroker_on_mingw32="yes"
+        zbroker_install_man="no"
         ;;
     *cygwin*)
         # Define on Cygwin to enable all library features
         CPPFLAGS="-D_GNU_SOURCE $CPPFLAGS"
-        AC_DEFINE(ZPIPES_HAVE_CYGWIN, 1, [Have Cygwin])
+        AC_DEFINE(ZBROKER_HAVE_CYGWIN, 1, [Have Cygwin])
         ;;
     *)
         AC_MSG_ERROR([unsupported system: ${host_os}.])
@@ -266,14 +266,14 @@ if test "x$GCC" = "xyes"; then
     CPPFLAGS="-pedantic -Werror -Wall ${CPPFLAGS}"
 fi
 
-AM_CONDITIONAL(ON_MINGW, test "x$zpipes_on_mingw32" = "xyes")
-AM_CONDITIONAL(INSTALL_MAN, test "x$zpipes_install_man" = "xyes")
-AM_CONDITIONAL(BUILD_DOC, test "x$zpipes_build_doc" = "xyes")
+AM_CONDITIONAL(ON_MINGW, test "x$zbroker_on_mingw32" = "xyes")
+AM_CONDITIONAL(INSTALL_MAN, test "x$zbroker_install_man" = "xyes")
+AM_CONDITIONAL(BUILD_DOC, test "x$zbroker_build_doc" = "xyes")
 
 # Checks for library functions.
 AC_TYPE_SIGNAL
 AC_CHECK_FUNCS(perror gettimeofday memset getifaddrs freeifaddrs)
 
 # Specify output files
-AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile src/libzpipes.pc src/libzpipesclient.pc])
+AC_CONFIG_FILES([Makefile src/Makefile doc/Makefile src/libzbroker.pc src/libzpipesclient.pc])
 AC_OUTPUT

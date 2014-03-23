@@ -1,8 +1,8 @@
 /*  =========================================================================
-    zpipes_agent - work with background zpipes agent
+    zbroker_selftest - run self tests
 
     -------------------------------------------------------------------------
-    Copyright contributors as noted in the AUTHORS file.
+    Copyright (c) the Contributors as noted in the AUTHORS file.
     This file is part of zbroker, the ZeroMQ broker project.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -11,25 +11,20 @@
     =========================================================================
 */
 
-#ifndef __ZPIPES_AGENT_H_INCLUDED__
-#define __ZPIPES_AGENT_H_INCLUDED__
+#include "zbroker_classes.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+int main (int argc, char *argv [])
+{
+    bool verbose;
+    if (argc == 2 && streq (argv [1], "-v"))
+        verbose = true;
+    else
+        verbose = false;
 
-typedef struct _zpipes_agent_t zpipes_agent_t;
-
-//  Background engine
-void
-    zpipes_agent_main (void *args, zctx_t *ctx, void *pipe);
-
-//  Self test of this class
-void
-    zpipes_agent_test (bool verbose);
-
-#ifdef __cplusplus
+    printf ("Running self tests...\n");
+    zpipes_msg_test (verbose);
+    zpipes_server_test (verbose);
+    zpipes_client_test (verbose);
+    printf ("Tests passed OK\n");
+    return 0;
 }
-#endif
-
-#endif

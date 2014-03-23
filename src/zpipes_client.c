@@ -1,7 +1,7 @@
 /*  =========================================================================
     zpipes_client.c - simple API for zpipes client applications
 
-    Copyright contributors as noted in the AUTHORS file.
+    Copyright (c) the Contributors as noted in the AUTHORS file.
     This file is part of zserver, the ZeroMQ server project.
 
     This Source Code Form is subject to the terms of the Mozilla Public

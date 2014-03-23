@@ -1,7 +1,7 @@
 /*  =========================================================================
     zpipes_server - ZPIPES server
 
-    Copyright contributors as noted in the AUTHORS file.                    
+    Copyright (c) the Contributors as noted in the AUTHORS file.
     This file is part of zbroker, the ZeroMQ broker project.                
                                                                             
     This Source Code Form is subject to the terms of the Mozilla Public

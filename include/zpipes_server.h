@@ -11,7 +11,7 @@
     * The code generation script that built this file: zproto_server_c
     ************************************************************************
 
-    Copyright contributors as noted in the AUTHORS file.               
+    Copyright (c) the Contributors as noted in the AUTHORS file.       
     This file is part of zbroker, the ZeroMQ broker project.           
                                                                        
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -47,9 +47,9 @@ void
 void
     zpipes_server_setoption (zpipes_server_t *self, const char *path, const char *value);
 
-//  Binds the server to a specified endpoint
+//  Binds the server to an endpoint, formatted as printf string
 long
-    zpipes_server_bind (zpipes_server_t *self, const char *endpoint);
+    zpipes_server_bind (zpipes_server_t *self, const char *format, ...);
 
 //  Self test of this class
 void

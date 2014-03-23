@@ -25,12 +25,12 @@ int main (int argc, char *argv [])
     puts (COPYRIGHT);
     puts (NOWARRANTY);
 
-    if (argc < 2) {
+    if (argc == 1) {
         puts ("Usage: zbroker [broker-name]");
         return 0;
     }
     //  Install all services
-    const char *zpipes_instance = argc == 2? argv [1]: "local";
+    const char *zpipes_instance = argc > 1? argv [1]: "local";
     zclock_log ("I: starting zpipes server '%s'", zpipes_instance);
     zpipes_server_t *zpipes_server = zpipes_server_new ();
     zpipes_server_bind (zpipes_server, "ipc://@/zpipes/%s", zpipes_instance);

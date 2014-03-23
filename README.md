@@ -1,53 +1,106 @@
-# zbroker - a ZeroMQ Broker
+# zbroker - the ZeroMQ broker project
 
-The zbroker offers a broker container for multiple ZeroMQ-based messaging services. The current list of messaging services is:
+The zbroker project is a container for arbitrary ZeroMQ-based messaging services. The current list of messaging services is:
 
-* zpipes - reliable, distributed named pipes
+* ZPIPES - reliable, distributed named pipes
 
-## zpipes Overview
+## General Operation
 
-*This section is out of date and needs rewriting.*
+To build zbroker:
 
-The zpipes service provides a reliable named pipes service. A pipe is a one-directional stream of data "chunks" between applications.
+    git clone git://github.com/jedisct1/libsodium.git
+    for project in libzmq czmq zyre zbroker; do
+        git clone git://github.com/zeromq/$project.git
+    done
+    for project in libsodium libzmq czmq zyre zbroker; do
+        cd $project
+        ./autogen.sh
+        ./configure && make check
+        sudo make install
+        sudo ldconfig
+        cd ..
+    done
 
-* Currently, all applications must be on the same machine instance.
-* Currently, a pipe accepts multiple writers, and a single reader.
-* Pipes are named using any convention that suits the application.
-* The application is responsible for properly closing pipes, thus releasing resources.
+To run zbroker:
 
-### Command Line Syntax
+    zbroker [broker-name]
 
-When run without arguments, the zpipes broker uses the name "default". You may run at most one broker with the same name, on a single machine instance. If you wish to use multiple brokers, e.g. for testing, you must use a different name for each.
+Where 'broker-name' is a string that is unique on any given host. The default broker name is 'local'. To end the broker, send a TERM or INT signal (Ctrl-C).
 
-To end a zpipes broker, send a TERM or INT signal (Ctrl-C).
+## ZPIPES Overview
 
-### IPC Command Interface
+### The ZPIPES Protocol
 
-The zpipes broker accepts ZeroMQ ipc:// connections on the "ipc://@/zpipes/local" endpoint, which is an abstract IPC endpoint. The sole interface between applications and the broker is across such IPC connections. The command interface has these commands, consisting of multiframe data:
+The following ABNF grammar defines the ZPIPES protocol:
 
-* "OPEN" / pipename -- opens a named pipe, for reading or writing.
-* "CLOSE" / pipename -- closes a named pipe.
-* "READ" / pipename -- reads next chunk of data from the specified pipe.
-* "WRITE" / pipename / chunk -- writes a chunk of data to the specified pipe.
+    ZPIPES = reader | writer
 
-The broker replies to valid OPEN, CLOSE, and WRITE commands with a single frame containing "OK".
+    reader = input-command *fetch-command close-command
+    input-command = c:input ( s:ready | s:failed )
+    fetch-command = c:fetch ( s:fetched | s:empty | s:timeout | s:failed )
+    close-command = c:close ( s:closed | s:failed )
 
-The broker replies to a valid READ command with a single frame containing the chunk of data. If there is no data available, the READ command will block until data is available.
+    writer = output-command *store-command close-command
+    output = c:output ( s:ready | s:failed )
+    store = c:store ( s:stored | s:failed )
 
-The application can pipeline commands, e.g. sending multiple WRITE commands, before reading the responses.
+    ;         Create a new pipe for reading
+    C:input         = signature %d1 pipename
+    signature       = %xAA %d0              ; two octets
+    pipename        = string                ; Name of pipe
 
-### Reliability
+    ;         Create a new pipe for writing
+    C:output        = signature %d2 pipename
+    pipename        = string                ; Name of pipe
 
-The zpipes broker does not store chunks on disk, so if the broker process crashes or is killed, data may be lost. However pipes and the chunks they contain will survive the stop/restart of application processes. Thus one process may write to a pipe, then exit, and then another process may start up, and read from the pipe.
+    ;         Input or output request was successful
+    C:ready         = signature %d3
 
-### End of Stream
+    ;         Input or output request failed
+    C:failed        = signature %d4 reason
+    reason          = string                ; Reason for failure
 
-If the application wants to signal the end of the stream it must send a recognizable chunk to indicate that. The zpipes model treats pipes as infinite streams.
+    ;         Read next chunk of data from pipe
+    C:fetch         = signature %d5 timeout
+    timeout         = number-4              ; Timeout, msecs, or zero
 
-### Multiple Writers
+    ;         Have data from pipe
+    C:fetched       = signature %d6 chunk
+    chunk           = chunk                 ; Chunk of data
 
-Multiple applications can write to the same pipe. Chunks will then be fair-queued from writers, so that heavy writers do not block lighter ones.
+    ;         Pipe is closed, no more data
+    C:end_of_pipe   = signature %d7
 
+    ;         Get or put ended with timeout
+    C:timeout       = signature %d8
+
+    ;         Write chunk of data to pipe
+    C:store         = signature %d9 chunk
+    chunk           = chunk                 ; Chunk of data
+
+    ;         Store was successful
+    C:stored        = signature %d10
+
+    ;         Close pipe
+    C:close         = signature %d11
+
+    ;         Close was successful
+    C:closed        = signature %d12
+
+    ; A chunk has 4-octet length + binary contents
+    chunk           = number-4 *OCTET
+
+    ; Strings are always length + text contents
+    string          = number-1 *VCHAR
+
+    ; Numbers are unsigned integers in network byte order
+    number-1        = 1OCTET
+    number-4        = 4OCTET
+
+### The ZPIPES API
+
+The zpipes_client class provides the public API.
+    
 ## Ownership and Contributing
 
 The contributors are listed in AUTHORS. This project uses the MPL v2 license, see LICENSE.

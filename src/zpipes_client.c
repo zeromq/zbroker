@@ -26,6 +26,7 @@ struct _zpipes_client_t {
     zctx_t *ctx;                //  Private CZMQ context
     char *name;                 //  Name of named zpipe
     void *dealer;               //  Dealer socket to zpipes server
+    int error;                  //  Last error cause
 };
 
 
@@ -106,21 +107,23 @@ zpipes_client_write (zpipes_client_t *self, void *data, size_t size)
 
 //  ---------------------------------------------------------------------
 //  Read chunk of data from pipe. If timeout is non zero, waits at most
-//  that many msecs for data. Returns number of bytes read, or zero if
-//  timeout expired, or if pipe was closed by the writer, and no more
-//  data is available.
+//  that many msecs for data. Returns number of bytes read, or zero if the
+//  pipe was closed by the writer, and no more data is available. On a
+//  timeout or interrupt, returns -1. To get the actual error code, call
+//  zpipes_client_error(), which will be EINTR or EAGAIN.
 
-size_t
+ssize_t
 zpipes_client_read (zpipes_client_t *self, void *data, size_t max_size, int timeout)
 {
     assert (self);
-    
+
     zpipes_msg_send_fetch (self->dealer, timeout);
     zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
-    if (!reply)
-        return 0;               //  Interrupted
-
-    size_t bytes = 0;
+    if (!reply) {
+        self->error = EINTR;
+        return -1;              //  Interrupted
+    }
+    ssize_t bytes = 0;
     if (zpipes_msg_id (reply) == ZPIPES_MSG_FETCHED) {
         zchunk_t *chunk = zpipes_msg_chunk (reply);
         bytes = zchunk_size (chunk);
@@ -129,10 +132,26 @@ zpipes_client_read (zpipes_client_t *self, void *data, size_t max_size, int time
         memcpy (data, zchunk_data (chunk), bytes);
     }
     else
-        bytes = 0;              //  Timeout or end-of-pipe
-        
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_END_OF_PIPE)
+        bytes = 0;
+    else
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_TIMEOUT) {
+        self->error = EAGAIN;
+        bytes = -1;
+    }
     zpipes_msg_destroy (&reply);
     return bytes;
+}
+
+
+//  ---------------------------------------------------------------------
+//  Returns last error number, if any
+
+int
+zpipes_client_error (zpipes_client_t *self)
+{
+    assert (self);
+    return self->error;
 }
 
 
@@ -150,12 +169,18 @@ zpipes_client_test (bool verbose)
     zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");
     zpipes_client_t *writer = zpipes_client_new ("local", ">test pipe");
 
+    byte buffer [6];
+    ssize_t bytes;
+
+    //  Expect timeout error, EAGAIN
+    bytes = zpipes_client_read (reader, buffer, 6, 100);
+    assert (bytes == -1);
+    assert (zpipes_client_error (reader) == EAGAIN);
+
     zpipes_client_write (writer, "CHUNK1", 6);
     zpipes_client_write (writer, "CHUNK2", 6);
     zpipes_client_write (writer, "CHUNK3", 6);
 
-    byte buffer [6];
-    size_t bytes;
     bytes = zpipes_client_read (reader, buffer, 6, 200);
     assert (bytes == 6);
     bytes = zpipes_client_read (reader, buffer, 6, 200);
@@ -163,7 +188,13 @@ zpipes_client_test (bool verbose)
     bytes = zpipes_client_read (reader, buffer, 6, 200);
     assert (bytes == 6);
 
+    //  Now close writer
     zpipes_client_destroy (&writer);
+
+    //  Expect end of pipe (empty chunk)
+    bytes = zpipes_client_read (reader, buffer, 6, 200);
+    assert (bytes == 0);
+
     zpipes_client_destroy (&reader);
     zpipes_server_destroy (&server);
 

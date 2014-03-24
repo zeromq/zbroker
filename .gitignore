@@ -42,6 +42,8 @@ src/platform.h.in~
 src/stamp-h1
 src/test-suite.log
 src/zbroker_selftest
+src/zbroker_selftest.log
+src/zbroker_selftest.trs
 *.la
 *.pc
 

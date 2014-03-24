@@ -30,14 +30,17 @@ struct _zpipes_client_t {
 };
 
 
-static void
+//  Returns 0 if the reply from the broker isn't what we expect
+//  TODO: implement timeout when broker doesn't reply at all
+
+static int
 s_expect_reply (zpipes_client_t *self, int message_id)
 {
     zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
     assert (reply);
-    //  Current behavior when faced with unexpected reply is to die
-    assert (zpipes_msg_id (reply) == message_id);
+    int rc = zpipes_msg_id (reply) == message_id? 0: -1;
     zpipes_msg_destroy (&reply);
+    return rc;
 }
 
 
@@ -64,8 +67,9 @@ zpipes_client_new (const char *server_name, const char *pipe_name)
         zpipes_msg_send_output (self->dealer, pipe_name + 1);
     else
         zpipes_msg_send_input (self->dealer, pipe_name);
-    s_expect_reply (self, ZPIPES_MSG_READY);
-    
+
+    if (s_expect_reply (self, ZPIPES_MSG_READY))
+        assert (false);         //  Cannot happen in current use case
     return self;
 }
 
@@ -81,7 +85,8 @@ zpipes_client_destroy (zpipes_client_t **self_p)
         zpipes_client_t *self = *self_p;
         if (self->dealer) {
             zpipes_msg_send_close (self->dealer);
-            s_expect_reply (self, ZPIPES_MSG_CLOSED);
+            if (s_expect_reply (self, ZPIPES_MSG_CLOSED))
+                assert (false);     //  Cannot happen in current use case
         }
         zctx_destroy (&self->ctx);
         free (self);
@@ -91,9 +96,10 @@ zpipes_client_destroy (zpipes_client_t **self_p)
 
 
 //  ---------------------------------------------------------------------
-//  Write chunk of data to pipe
+//  Write chunk of data to pipe; returns number of bytes written, or -1
+//  in case of error, and then sets zpipes_client_error() to EBADF.
 
-void
+ssize_t
 zpipes_client_write (zpipes_client_t *self, void *data, size_t size)
 {
     assert (self);
@@ -101,7 +107,12 @@ zpipes_client_write (zpipes_client_t *self, void *data, size_t size)
     assert (chunk);
     zpipes_msg_send_store (self->dealer, chunk);
     zchunk_destroy (&chunk);
-    s_expect_reply (self, ZPIPES_MSG_STORED);
+    if (s_expect_reply (self, ZPIPES_MSG_STORED)) {
+        self->error = EBADF;
+        return -1;
+    }
+    else
+        return size;
 }
 
 
@@ -110,7 +121,7 @@ zpipes_client_write (zpipes_client_t *self, void *data, size_t size)
 //  that many msecs for data. Returns number of bytes read, or zero if the
 //  pipe was closed by the writer, and no more data is available. On a
 //  timeout or interrupt, returns -1. To get the actual error code, call
-//  zpipes_client_error(), which will be EINTR or EAGAIN.
+//  zpipes_client_error(), which will be EINTR, EAGAIN, or EBADF.
 
 ssize_t
 zpipes_client_read (zpipes_client_t *self, void *data, size_t max_size, int timeout)
@@ -138,6 +149,10 @@ zpipes_client_read (zpipes_client_t *self, void *data, size_t max_size, int time
     if (zpipes_msg_id (reply) == ZPIPES_MSG_TIMEOUT) {
         self->error = EAGAIN;
         bytes = -1;
+    }
+    else {
+        self->error = EBADF;
+        return -1;
     }
     zpipes_msg_destroy (&reply);
     return bytes;
@@ -177,9 +192,12 @@ zpipes_client_test (bool verbose)
     assert (bytes == -1);
     assert (zpipes_client_error (reader) == EAGAIN);
 
-    zpipes_client_write (writer, "CHUNK1", 6);
-    zpipes_client_write (writer, "CHUNK2", 6);
-    zpipes_client_write (writer, "CHUNK3", 6);
+    bytes = zpipes_client_write (writer, "CHUNK1", 6);
+    assert (bytes == 6);
+    bytes = zpipes_client_write (writer, "CHUNK2", 6);
+    assert (bytes == 6);
+    bytes = zpipes_client_write (writer, "CHUNK3", 6);
+    assert (bytes == 6);
 
     bytes = zpipes_client_read (reader, buffer, 6, 200);
     assert (bytes == 6);
@@ -194,6 +212,11 @@ zpipes_client_test (bool verbose)
     //  Expect end of pipe (empty chunk)
     bytes = zpipes_client_read (reader, buffer, 6, 200);
     assert (bytes == 0);
+
+    //  Expect illegal action (EBADF) writing on reader
+    bytes = zpipes_client_write (reader, "CHUNK1", 6);
+    assert (bytes == -1);
+    assert (zpipes_client_error (reader) == EBADF);
 
     zpipes_client_destroy (&reader);
     zpipes_server_destroy (&server);

@@ -64,6 +64,9 @@
             <action name = "send" message = "failed" />
             <action name = "terminate" />
         </event>
+        <event name = "$other">
+            <action name = "send" message = "failed" />
+        </event>
     </state>
 
     <!-- API methods

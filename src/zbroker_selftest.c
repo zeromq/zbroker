@@ -1,8 +1,8 @@
 /*  =========================================================================
-    zpipes_selftest - run self tests
+    zbroker_selftest - run self tests
 
     -------------------------------------------------------------------------
-    Copyright contributors as noted in the AUTHORS file.
+    Copyright (c) the Contributors as noted in the AUTHORS file.
     This file is part of zbroker, the ZeroMQ broker project.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -11,7 +11,7 @@
     =========================================================================
 */
 
-#include "zpipes_classes.h"
+#include "zbroker_classes.h"
 
 int main (int argc, char *argv [])
 {
@@ -24,9 +24,7 @@ int main (int argc, char *argv [])
     printf ("Running self tests...\n");
     zpipes_msg_test (verbose);
     zpipes_server_test (verbose);
-//     zpipes_agent_test (verbose);
-//     zpipes_test (verbose);
-//     zpipes_client_test (verbose);
+    zpipes_client_test (verbose);
     printf ("Tests passed OK\n");
     return 0;
 }

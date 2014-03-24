@@ -21,23 +21,32 @@
     </state>
 
     <state name = "reading">
-        <event name = "fetch" next = "reading">
-            <action name = "fetch chunk from pipe" />
-            <action name = "send" message = "fetched" />
+        <event name = "fetch" next = "expecting chunk">
+            <action name = "expect chunk on pipe" />
         </event>
         <event name = "close">
             <action name = "close pipe" />
             <action name = "send" message = "closed" />
             <action name = "terminate" />
         </event>
-        <event name = "empty">
-            <action name = "send" message = "empty" />
+    </state>
+
+    <state name = "expecting chunk">
+        <event name = "have chunk" next = "reading">
+            <action name = "clear pending reads" />
+            <action name = "fetch chunk from pipe" />
+            <action name = "send" message = "fetched" />
         </event>
-        <event name = "timeout">
+        <event name = "pipe terminated" next = "reading">
+            <action name = "clear pending reads" />
+            <action name = "send" message = "end of pipe" />
+        </event>
+        <event name = "timeout expired" next = "reading">
+            <action name = "clear pending reads" />
             <action name = "send" message = "timeout" />
         </event>
     </state>
-
+    
     <state name = "writing">
         <event name = "store" next = "writing">
             <action name = "store chunk to pipe" />
@@ -51,13 +60,9 @@
     </state>
 
     <state name = "defaults">
-        <event name = "failed">
+        <event name = "exception">
             <action name = "send" message = "failed" />
             <action name = "terminate" />
-        </event>
-        <event name = "expired">
-        </event>
-        <event name = "heartbeat">
         </event>
     </state>
 

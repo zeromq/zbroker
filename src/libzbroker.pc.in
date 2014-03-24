@@ -3,9 +3,9 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 
-Name: libzpipes
-Description: reliable & distributed named pipes
+Name: libzbroker
+Description: ZeroMQ broker project
 Version: @VERSION@
 Requires: libzmq libczmq libzyre
-Libs: -L${libdir} -lzpipes
+Libs: -L${libdir} -lzbroker
 Cflags: -I${includedir}

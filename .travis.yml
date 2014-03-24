@@ -1,4 +1,3 @@
-# zpipes
 language: c
 
 #   Install dependencies first
@@ -18,5 +17,5 @@ before_script:
 -     cd ..
 - done
 
-#   Build and check libzre
-script: ./autogen.sh && ./configure && make && make check
+#   Build and check this project
+script: ./autogen.sh && ./configure && make check

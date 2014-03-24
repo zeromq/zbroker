@@ -13,7 +13,7 @@
     * The code generation script that built this file: zproto_codec_c
     ************************************************************************
     
-    Copyright contributors as noted in the AUTHORS file.               
+    Copyright (c) the Contributors as noted in the AUTHORS file.       
     This file is part of zbroker, the ZeroMQ broker project.           
                                                                        
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -44,7 +44,7 @@
     FETCHED - Have data from pipe
         chunk               chunk       Chunk of data
 
-    EMPTY - Pipe is closed, no more data
+    END_OF_PIPE - Pipe is closed, no more data
 
     TIMEOUT - Get or put ended with timeout
 
@@ -65,7 +65,7 @@
 #define ZPIPES_MSG_FAILED                   4
 #define ZPIPES_MSG_FETCH                    5
 #define ZPIPES_MSG_FETCHED                  6
-#define ZPIPES_MSG_EMPTY                    7
+#define ZPIPES_MSG_END_OF_PIPE              7
 #define ZPIPES_MSG_TIMEOUT                  8
 #define ZPIPES_MSG_STORE                    9
 #define ZPIPES_MSG_STORED                   10
@@ -123,12 +123,12 @@ int
 //  Send the INPUT to the output in one step
 int
     zpipes_msg_send_input (void *output,
-        char *pipename);
+        const char *pipename);
     
 //  Send the OUTPUT to the output in one step
 int
     zpipes_msg_send_output (void *output,
-        char *pipename);
+        const char *pipename);
     
 //  Send the READY to the output in one step
 int
@@ -137,7 +137,7 @@ int
 //  Send the FAILED to the output in one step
 int
     zpipes_msg_send_failed (void *output,
-        char *reason);
+        const char *reason);
     
 //  Send the FETCH to the output in one step
 int
@@ -149,9 +149,9 @@ int
     zpipes_msg_send_fetched (void *output,
         zchunk_t *chunk);
     
-//  Send the EMPTY to the output in one step
+//  Send the END_OF_PIPE to the output in one step
 int
-    zpipes_msg_send_empty (void *output);
+    zpipes_msg_send_end_of_pipe (void *output);
     
 //  Send the TIMEOUT to the output in one step
 int
@@ -193,20 +193,20 @@ int
     zpipes_msg_id (zpipes_msg_t *self);
 void
     zpipes_msg_set_id (zpipes_msg_t *self, int id);
-char *
+const char *
     zpipes_msg_command (zpipes_msg_t *self);
 
 //  Get/set the pipename field
-char *
+const char *
     zpipes_msg_pipename (zpipes_msg_t *self);
 void
-    zpipes_msg_set_pipename (zpipes_msg_t *self, char *format, ...);
+    zpipes_msg_set_pipename (zpipes_msg_t *self, const char *format, ...);
 
 //  Get/set the reason field
-char *
+const char *
     zpipes_msg_reason (zpipes_msg_t *self);
 void
-    zpipes_msg_set_reason (zpipes_msg_t *self, char *format, ...);
+    zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...);
 
 //  Get/set the timeout field
 uint32_t

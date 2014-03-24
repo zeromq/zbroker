@@ -51,7 +51,7 @@
         <field name = "chunk" type = "chunk">Chunk of data</field>
     </message>
 
-    <message name = "empty">
+    <message name = "end of pipe">
         Pipe is closed, no more data
     </message>
 

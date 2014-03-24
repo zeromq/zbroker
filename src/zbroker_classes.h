@@ -1,8 +1,8 @@
 /*  =========================================================================
-    zpipes_agent - work with background zpipes agent
+    zpipes_classes - all classes in proper order for building
 
     -------------------------------------------------------------------------
-    Copyright contributors as noted in the AUTHORS file.
+    Copyright (c) the Contributors as noted in the AUTHORS file.
     This file is part of zbroker, the ZeroMQ broker project.
 
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -11,25 +11,13 @@
     =========================================================================
 */
 
-#ifndef __ZPIPES_AGENT_H_INCLUDED__
-#define __ZPIPES_AGENT_H_INCLUDED__
+#ifndef __ZPIPES_CLASSES_H_INCLUDED__
+#define __ZPIPES_CLASSES_H_INCLUDED__
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct _zpipes_agent_t zpipes_agent_t;
-
-//  Background engine
-void
-    zpipes_agent_main (void *args, zctx_t *ctx, void *pipe);
-
-//  Self test of this class
-void
-    zpipes_agent_test (bool verbose);
-
-#ifdef __cplusplus
-}
-#endif
+//  External API
+#include "../include/zbroker.h"
+#include "../include/zpipes_msg.h"
+#include "../include/zpipes_server.h"
+#include "../include/zpipes_client.h"
 
 #endif

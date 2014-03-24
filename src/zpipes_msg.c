@@ -13,7 +13,7 @@
     * The code generation script that built this file: zproto_codec_c
     ************************************************************************
     
-    Copyright contributors as noted in the AUTHORS file.               
+    Copyright (c) the Contributors as noted in the AUTHORS file.       
     This file is part of zbroker, the ZeroMQ broker project.           
                                                                        
     This Source Code Form is subject to the terms of the Mozilla Public
@@ -287,7 +287,7 @@ zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
             }
             break;
 
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
 
         case ZPIPES_MSG_TIMEOUT:
@@ -411,7 +411,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 frame_size += zchunk_size (self->chunk);
             break;
             
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
             
         case ZPIPES_MSG_TIMEOUT:
@@ -488,7 +488,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 PUT_NUMBER4 (0);    //  Empty chunk
             break;
 
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
 
         case ZPIPES_MSG_TIMEOUT:
@@ -567,7 +567,7 @@ zpipes_msg_send_again (zpipes_msg_t *self, void *output)
 int
 zpipes_msg_send_input (
     void *output,
-    char *pipename)
+    const char *pipename)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT);
     zpipes_msg_set_pipename (self, pipename);
@@ -581,7 +581,7 @@ zpipes_msg_send_input (
 int
 zpipes_msg_send_output (
     void *output,
-    char *pipename)
+    const char *pipename)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
     zpipes_msg_set_pipename (self, pipename);
@@ -607,7 +607,7 @@ zpipes_msg_send_ready (
 int
 zpipes_msg_send_failed (
     void *output,
-    char *reason)
+    const char *reason)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_FAILED);
     zpipes_msg_set_reason (self, reason);
@@ -645,13 +645,13 @@ zpipes_msg_send_fetched (
 
 
 //  --------------------------------------------------------------------------
-//  Send the EMPTY to the socket in one step
+//  Send the END_OF_PIPE to the socket in one step
 
 int
-zpipes_msg_send_empty (
+zpipes_msg_send_end_of_pipe (
     void *output)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_EMPTY);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_END_OF_PIPE);
     return zpipes_msg_send (&self, output);
 }
 
@@ -756,7 +756,7 @@ zpipes_msg_dup (zpipes_msg_t *self)
             copy->chunk = self->chunk? zchunk_dup (self->chunk): NULL;
             break;
 
-        case ZPIPES_MSG_EMPTY:
+        case ZPIPES_MSG_END_OF_PIPE:
             break;
 
         case ZPIPES_MSG_TIMEOUT:
@@ -832,8 +832,8 @@ zpipes_msg_dump (zpipes_msg_t *self)
             printf ("    }\n");
             break;
             
-        case ZPIPES_MSG_EMPTY:
-            puts ("EMPTY:");
+        case ZPIPES_MSG_END_OF_PIPE:
+            puts ("END_OF_PIPE:");
             break;
             
         case ZPIPES_MSG_TIMEOUT:
@@ -904,7 +904,7 @@ zpipes_msg_set_id (zpipes_msg_t *self, int id)
 //  --------------------------------------------------------------------------
 //  Return a printable command string
 
-char *
+const char *
 zpipes_msg_command (zpipes_msg_t *self)
 {
     assert (self);
@@ -927,8 +927,8 @@ zpipes_msg_command (zpipes_msg_t *self)
         case ZPIPES_MSG_FETCHED:
             return ("FETCHED");
             break;
-        case ZPIPES_MSG_EMPTY:
-            return ("EMPTY");
+        case ZPIPES_MSG_END_OF_PIPE:
+            return ("END_OF_PIPE");
             break;
         case ZPIPES_MSG_TIMEOUT:
             return ("TIMEOUT");
@@ -952,7 +952,7 @@ zpipes_msg_command (zpipes_msg_t *self)
 //  --------------------------------------------------------------------------
 //  Get/set the pipename field
 
-char *
+const char *
 zpipes_msg_pipename (zpipes_msg_t *self)
 {
     assert (self);
@@ -960,7 +960,7 @@ zpipes_msg_pipename (zpipes_msg_t *self)
 }
 
 void
-zpipes_msg_set_pipename (zpipes_msg_t *self, char *format, ...)
+zpipes_msg_set_pipename (zpipes_msg_t *self, const char *format, ...)
 {
     //  Format pipename from provided arguments
     assert (self);
@@ -975,7 +975,7 @@ zpipes_msg_set_pipename (zpipes_msg_t *self, char *format, ...)
 //  --------------------------------------------------------------------------
 //  Get/set the reason field
 
-char *
+const char *
 zpipes_msg_reason (zpipes_msg_t *self)
 {
     assert (self);
@@ -983,7 +983,7 @@ zpipes_msg_reason (zpipes_msg_t *self)
 }
 
 void
-zpipes_msg_set_reason (zpipes_msg_t *self, char *format, ...)
+zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...)
 {
     //  Format reason from provided arguments
     assert (self);
@@ -1194,7 +1194,7 @@ zpipes_msg_test (bool verbose)
         assert (memcmp (zchunk_data (zpipes_msg_chunk (self)), "Captcha Diem", 12) == 0);
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_EMPTY);
+    self = zpipes_msg_new (ZPIPES_MSG_END_OF_PIPE);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);

@@ -17,8 +17,7 @@
 @end
 */
 
-#include "../include/zpipes.h"
-#include "../include/zpipes_msg.h"
+#include "zbroker_classes.h"
 
 //  ---------------------------------------------------------------------
 //  Structure of zpipes_client class

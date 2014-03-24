@@ -120,7 +120,7 @@ zpipes_server_bind (zpipes_server_t *self, const char *format, ...)
 
     //  Send BIND command to server task
     zstr_sendm (self->pipe, "BIND");
-    zstr_sendf (self->pipe, endpoint);
+    zstr_send (self->pipe, endpoint);
     char *reply = zstr_recv (self->pipe);
     long reply_value = atol (reply);
     free (reply);
@@ -490,12 +490,12 @@ s_server_apply_config (s_server_t *self)
         zconfig_t *entry = zconfig_child (section);
         while (entry) {
             if (streq (zconfig_name (entry), "echo"))
-                zclock_log (zconfig_value (entry));
+                zclock_log ("%s", zconfig_value (entry));
             entry = zconfig_next (entry);
         }
         if (streq (zconfig_name (section), "bind")) {
             char *endpoint = zconfig_resolve (section, "endpoint", "?");
-            self->port = zsocket_bind (self->router, endpoint);
+            self->port = zsocket_bind (self->router, "%s", endpoint);
         }
         section = zconfig_next (section);
     }
@@ -510,7 +510,7 @@ s_server_control_message (s_server_t *self)
     char *method = zmsg_popstr (msg);
     if (streq (method, "BIND")) {
         char *endpoint = zmsg_popstr (msg);
-        self->port = zsocket_bind (self->router, endpoint);
+        self->port = zsocket_bind (self->router, "%s", endpoint);
         zstr_sendf (self->pipe, "%d", self->port);
         free (endpoint);
     }

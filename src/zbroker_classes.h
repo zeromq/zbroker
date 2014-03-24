@@ -15,7 +15,7 @@
 #define __ZPIPES_CLASSES_H_INCLUDED__
 
 //  External API
-#include "../include/zpipes.h"
+#include "../include/zbroker.h"
 #include "../include/zpipes_msg.h"
 #include "../include/zpipes_server.h"
 #include "../include/zpipes_client.h"

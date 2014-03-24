@@ -144,12 +144,13 @@ typedef enum {
     input_event = 1,
     output_event = 2,
     exception_event = 3,
-    fetch_event = 4,
-    close_event = 5,
-    have_chunk_event = 6,
-    pipe_terminated_event = 7,
-    timeout_expired_event = 8,
-    store_event = 9
+    _other_event = 4,
+    fetch_event = 5,
+    close_event = 6,
+    have_chunk_event = 7,
+    pipe_terminated_event = 8,
+    timeout_expired_event = 9,
+    store_event = 10
 } event_t;
 
 //  Names for animation
@@ -168,6 +169,7 @@ s_event_name [] = {
     "INPUT",
     "OUTPUT",
     "exception",
+    "$other",
     "FETCH",
     "CLOSE",
     "have chunk",
@@ -623,11 +625,17 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         client->next_event = terminate_event;
                     }
                 }
-                else
-                    zclock_log ("%6d: W: unhandled event %s in %s",
-                        client->client_id,
-                        s_event_name [client->event],
-                        s_state_name [client->state]);
+                else {
+                    //  Process all other events
+                    if (!client->exception) {
+                        //  send failed
+                        zclock_log ("%6d:         $ send failed", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zpipes_msg_send (&(client->client.reply), self->router);
+                        client->client.reply = zpipes_msg_new (0);
+                        zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
+                    }
+                }
                 break;
 
             case reading_state:
@@ -679,11 +687,17 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         client->next_event = terminate_event;
                     }
                 }
-                else
-                    zclock_log ("%6d: W: unhandled event %s in %s",
-                        client->client_id,
-                        s_event_name [client->event],
-                        s_state_name [client->state]);
+                else {
+                    //  Process all other events
+                    if (!client->exception) {
+                        //  send failed
+                        zclock_log ("%6d:         $ send failed", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zpipes_msg_send (&(client->client.reply), self->router);
+                        client->client.reply = zpipes_msg_new (0);
+                        zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
+                    }
+                }
                 break;
 
             case expecting_chunk_state:
@@ -776,11 +790,17 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         client->next_event = terminate_event;
                     }
                 }
-                else
-                    zclock_log ("%6d: W: unhandled event %s in %s",
-                        client->client_id,
-                        s_event_name [client->event],
-                        s_state_name [client->state]);
+                else {
+                    //  Process all other events
+                    if (!client->exception) {
+                        //  send failed
+                        zclock_log ("%6d:         $ send failed", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zpipes_msg_send (&(client->client.reply), self->router);
+                        client->client.reply = zpipes_msg_new (0);
+                        zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
+                    }
+                }
                 break;
 
             case writing_state:
@@ -843,11 +863,17 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         client->next_event = terminate_event;
                     }
                 }
-                else
-                    zclock_log ("%6d: W: unhandled event %s in %s",
-                        client->client_id,
-                        s_event_name [client->event],
-                        s_state_name [client->state]);
+                else {
+                    //  Process all other events
+                    if (!client->exception) {
+                        //  send failed
+                        zclock_log ("%6d:         $ send failed", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FAILED);
+                        zpipes_msg_send (&(client->client.reply), self->router);
+                        client->client.reply = zpipes_msg_new (0);
+                        zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
+                    }
+                }
                 break;
 
         }

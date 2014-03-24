@@ -3,6 +3,6 @@
 #   Run selftests and check memory
 
 VG="valgrind --tool=memcheck --leak-check=full --show-reachable=yes --suppressions=valgrind.supp"
-gcc -g -o zbroker_selftest zpipes*.c ${CFLAGS} ${LDFLAGS} -DHAVE_CONFIG_H -lczmq -lzmq -lzyre -luuid -lsodium
+gcc -g -o zbroker_selftest zbroker_selftest.c zpipes*.c ${CFLAGS} ${LDFLAGS} -DHAVE_CONFIG_H -lczmq -lzmq -lzyre -luuid -lsodium
 $VG ./zbroker_selftest
 rm -f vgcore.*

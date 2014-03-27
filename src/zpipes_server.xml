@@ -37,6 +37,11 @@
             <action name = "fetch chunk from pipe" />
             <action name = "send" message = "fetched" />
         </event>
+        <event name = "close">
+            <action name = "close pipe" />
+            <action name = "send" message = "closed" />
+            <action name = "terminate" />
+        </event>
         <event name = "pipe terminated" next = "reading">
             <action name = "clear pending reads" />
             <action name = "send" message = "end of pipe" />

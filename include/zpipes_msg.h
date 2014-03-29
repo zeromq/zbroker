@@ -12,7 +12,6 @@
     * The XML model used for this code generation: zpipes_msg.xml
     * The code generation script that built this file: zproto_codec_c
     ************************************************************************
-    
     Copyright (c) the Contributors as noted in the AUTHORS file.       
     This file is part of zbroker, the ZeroMQ broker project.           
                                                                        

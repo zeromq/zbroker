@@ -12,47 +12,47 @@ The following ABNF grammar defines the ZPIPES protocol:
     store = c:store ( s:stored | s:failed )
 
     ;         Create a new pipe for reading
-    C:input         = signature %d1 pipename
-    signature       = %xAA %d0              ; two octets
+    input           = signature %d1 pipename
+    signature       = %xAA %xA0             ; two octets
     pipename        = string                ; Name of pipe
 
     ;         Create a new pipe for writing
-    C:output        = signature %d2 pipename
+    output          = signature %d2 pipename
     pipename        = string                ; Name of pipe
 
     ;         Input or output request was successful
-    C:ready         = signature %d3
+    ready           = signature %d3
 
     ;         Input or output request failed
-    C:failed        = signature %d4 reason
+    failed          = signature %d4 reason
     reason          = string                ; Reason for failure
 
     ;         Read next chunk of data from pipe
-    C:fetch         = signature %d5 timeout
+    fetch           = signature %d5 timeout
     timeout         = number-4              ; Timeout, msecs, or zero
 
     ;         Have data from pipe
-    C:fetched       = signature %d6 chunk
+    fetched         = signature %d6 chunk
     chunk           = chunk                 ; Chunk of data
 
     ;         Pipe is closed, no more data
-    C:end_of_pipe   = signature %d7
+    end_of_pipe     = signature %d7
 
     ;         Get or put ended with timeout
-    C:timeout       = signature %d8
+    timeout         = signature %d8
 
     ;         Write chunk of data to pipe
-    C:store         = signature %d9 chunk
+    store           = signature %d9 chunk
     chunk           = chunk                 ; Chunk of data
 
     ;         Store was successful
-    C:stored        = signature %d10
+    stored          = signature %d10
 
     ;         Close pipe
-    C:close         = signature %d11
+    close           = signature %d11
 
     ;         Close was successful
-    C:closed        = signature %d12
+    closed          = signature %d12
 
     ; A chunk has 4-octet length + binary contents
     chunk           = number-4 *OCTET

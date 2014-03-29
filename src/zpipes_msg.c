@@ -35,14 +35,14 @@
 //  Structure of our class
 
 struct _zpipes_msg_t {
-    zframe_t *routing_id;       //  Routing_id from ROUTER, if any
-    int id;                     //  zpipes_msg message ID
-    byte *needle;               //  Read/write pointer for serialization
-    byte *ceiling;              //  Valid upper limit for read pointer
-    char *pipename;             //  Name of pipe
-    char *reason;               //  Reason for failure
-    uint32_t timeout;           //  Timeout, msecs, or zero
-    zchunk_t *chunk;            //  Chunk of data
+    zframe_t *routing_id;               //  Routing_id from ROUTER, if any
+    int id;                             //  zpipes_msg message ID
+    byte *needle;                       //  Read/write pointer for serialization
+    byte *ceiling;                      //  Valid upper limit for read pointer
+    char *pipename;                     //  Name of pipe
+    char *reason;                       //  Reason for failure
+    uint32_t timeout;                   //  Timeout, msecs, or zero
+    zchunk_t *chunk;                    //  Chunk of data
 };
 
 //  --------------------------------------------------------------------------
@@ -998,7 +998,7 @@ zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...)
 //  --------------------------------------------------------------------------
 //  Get/set the timeout field
 
-uint32_t
+uint32_t 
 zpipes_msg_timeout (zpipes_msg_t *self)
 {
     assert (self);
@@ -1044,6 +1044,7 @@ zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t **chunk_p)
     self->chunk = *chunk_p;
     *chunk_p = NULL;
 }
+
 
 
 //  --------------------------------------------------------------------------

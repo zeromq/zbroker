@@ -12,14 +12,14 @@
     <grammar>
     ZPIPES = reader | writer
 
-    reader = input-command *fetch-command close-command
-    input-command = c:input ( s:ready | s:failed )
-    fetch-command = c:fetch ( s:fetched | s:empty | s:timeout | s:failed )
-    close-command = c:close ( s:closed | s:failed )
+    reader = input-command *read-command close-command
+    input-command = c:input ( s:input-ok | s:failed )
+    fetch-command = c:read ( s:read-ok | s:empty | s:timeout | s:failed )
+    close-command = c:close ( s:close-ok | s:failed )
 
-    writer = output-command *store-command close-command
-    output = c:output ( s:ready | s:failed )
-    store = c:store ( s:stored | s:failed )
+    writer = output-command *write-command close-command
+    output = c:output ( s:output-ok | s:failed )
+    store = c:write ( s:write-ok | s:failed )
     </grammar>
 
     <message name = "input">

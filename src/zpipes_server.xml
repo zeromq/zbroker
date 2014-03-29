@@ -20,6 +20,8 @@
         </event>
     </state>
 
+    This state allows two protocol commands, read and close:
+
     <state name = "reading">
         <event name = "read" next = "expecting chunk">
             <action name = "expect chunk on pipe" />
@@ -30,6 +32,13 @@
             <action name = "terminate" />
         </event>
     </state>
+
+    This internal state shows how we make a decision in the
+    state machine. These are three internal events; they can
+    happen come immediately from 'expect chunk on pipe', or
+    come later from various places. The server can ask for a
+    wakeup event (timeout expired). We can also get events
+    from other clients' machines.
 
     <state name = "expecting chunk">
         <event name = "have chunk" next = "reading">
@@ -59,6 +68,11 @@
         </event>
     </state>
 
+    The defaults state handles an 'exception_event' (sends
+    'failed' back to the client). It also specifies that any
+    unrecognized protocol command (an '$other' event) will
+    also cause the engine to send 'failed' back to the client.
+
     <state name = "defaults">
         <event name = "exception">
             <action name = "send" message = "failed" />
@@ -68,6 +82,9 @@
             <action name = "send" message = "failed" />
         </event>
     </state>
+
+    We can define API methods to pass commands back from the
+    application through to the engine.
 
     <!-- API methods
     <method name = "somename" return = "number">

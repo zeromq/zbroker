@@ -171,6 +171,9 @@ open_pipe_for_output (client_t *self)
 static void
 expect_chunk_on_pipe (client_t *self)
 {
+    if (zpipes_msg_count (self->request) == 0)
+        set_next_event (self, pipe_terminated_event);
+    else
     if (zlist_size (self->pipe->queue))
         set_next_event (self, have_chunk_event);
     else
@@ -297,6 +300,10 @@ zpipes_server_test (bool verbose)
     zpipes_msg_send_input (reader, "hello");
     s_expect_reply (reader, ZPIPES_MSG_INPUT_OK);
     
+    //  Zero read request returns "end of pipe"
+    zpipes_msg_send_read (reader, 0, 0);
+    s_expect_reply (reader, ZPIPES_MSG_END_OF_PIPE);
+
     //  Pipeline three read requests
     zpipes_msg_send_read (reader, 1000, 100);
     zpipes_msg_send_read (reader, 1000, 100);

@@ -31,8 +31,8 @@ The following ABNF grammar defines the ZPIPES protocol:
     output_ok       = signature %d5
 
     ;         Read a chunk of data from pipe
-    read            = signature %d6 count timeout
-    count           = number-4              ; Number of bytes to read
+    read            = signature %d6 size timeout
+    size            = number-4              ; Number of bytes to read
     timeout         = number-4              ; Timeout, msecs, or zero
 
     ;         Read was successful

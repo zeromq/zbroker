@@ -1,10 +1,7 @@
 <class
     name = "zpipes_msg"
-    signature = "0"
     title = "ZPIPES protocol"
     script = "zproto_codec_c"
-    header = "../include"
-    source = "."
     >
     This is a codec for the ZPIPES protocol (RFC tbd)
     <include filename = "license.xml" />
@@ -47,7 +44,7 @@
 
     <message name = "read">
         Read a chunk of data from pipe
-        <field name = "count" type = "number" size = "4">Number of bytes to read</field>
+        <field name = "size" type = "number" size = "4">Number of bytes to read</field>
         <field name = "timeout" type = "number" size = "4">Timeout, msecs, or zero</field>
     </message>
 

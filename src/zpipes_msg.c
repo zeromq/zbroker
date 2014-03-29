@@ -41,7 +41,7 @@ struct _zpipes_msg_t {
     byte *ceiling;                      //  Valid upper limit for read pointer
     char *pipename;                     //  Name of pipe
     char *reason;                       //  Reason for failure
-    uint32_t count;                     //  Number of bytes to read
+    uint32_t size;                      //  Number of bytes to read
     uint32_t timeout;                   //  Timeout, msecs, or zero
     zchunk_t *chunk;                    //  Chunk of data
 };
@@ -277,7 +277,7 @@ zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
             break;
 
         case ZPIPES_MSG_READ:
-            GET_NUMBER4 (self->count);
+            GET_NUMBER4 (self->size);
             GET_NUMBER4 (self->timeout);
             break;
 
@@ -409,7 +409,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
             break;
             
         case ZPIPES_MSG_READ:
-            //  count is a 4-byte integer
+            //  size is a 4-byte integer
             frame_size += 4;
             //  timeout is a 4-byte integer
             frame_size += 4;
@@ -489,7 +489,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
             break;
 
         case ZPIPES_MSG_READ:
-            PUT_NUMBER4 (self->count);
+            PUT_NUMBER4 (self->size);
             PUT_NUMBER4 (self->timeout);
             break;
 
@@ -651,11 +651,11 @@ zpipes_msg_send_output_ok (
 int
 zpipes_msg_send_read (
     void *output,
-    uint32_t count,
+    uint32_t size,
     uint32_t timeout)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ);
-    zpipes_msg_set_count (self, count);
+    zpipes_msg_set_size (self, size);
     zpipes_msg_set_timeout (self, timeout);
     return zpipes_msg_send (&self, output);
 }
@@ -786,7 +786,7 @@ zpipes_msg_dup (zpipes_msg_t *self)
             break;
 
         case ZPIPES_MSG_READ:
-            copy->count = self->count;
+            copy->size = self->size;
             copy->timeout = self->timeout;
             break;
 
@@ -862,7 +862,7 @@ zpipes_msg_dump (zpipes_msg_t *self)
             
         case ZPIPES_MSG_READ:
             puts ("READ:");
-            printf ("    count=%ld\n", (long) self->count);
+            printf ("    size=%ld\n", (long) self->size);
             printf ("    timeout=%ld\n", (long) self->timeout);
             break;
             
@@ -1044,20 +1044,20 @@ zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...)
 
 
 //  --------------------------------------------------------------------------
-//  Get/set the count field
+//  Get/set the size field
 
 uint32_t 
-zpipes_msg_count (zpipes_msg_t *self)
+zpipes_msg_size (zpipes_msg_t *self)
 {
     assert (self);
-    return self->count;
+    return self->size;
 }
 
 void
-zpipes_msg_set_count (zpipes_msg_t *self, uint32_t count)
+zpipes_msg_set_size (zpipes_msg_t *self, uint32_t size)
 {
     assert (self);
-    self->count = count;
+    self->size = size;
 }
 
 
@@ -1245,7 +1245,7 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    zpipes_msg_set_count (self, 123);
+    zpipes_msg_set_size (self, 123);
     zpipes_msg_set_timeout (self, 123);
     //  Send twice from same object
     zpipes_msg_send_again (self, output);
@@ -1256,7 +1256,7 @@ zpipes_msg_test (bool verbose)
         assert (self);
         assert (zpipes_msg_routing_id (self));
         
-        assert (zpipes_msg_count (self) == 123);
+        assert (zpipes_msg_size (self) == 123);
         assert (zpipes_msg_timeout (self) == 123);
         zpipes_msg_destroy (&self);
     }

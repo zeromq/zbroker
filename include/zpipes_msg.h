@@ -40,7 +40,7 @@
     OUTPUT_OK - Output request was successful
 
     READ - Read a chunk of data from pipe
-        count               number 4    Number of bytes to read
+        size                number 4    Number of bytes to read
         timeout             number 4    Timeout, msecs, or zero
 
     READ_OK - Read was successful
@@ -150,7 +150,7 @@ int
 //  Send the READ to the output in one step
 int
     zpipes_msg_send_read (void *output,
-        uint32_t count,
+        uint32_t size,
         uint32_t timeout);
     
 //  Send the READ_OK to the output in one step
@@ -218,11 +218,11 @@ const char *
 void
     zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...);
 
-//  Get/set the count field
+//  Get/set the size field
 uint32_t
-    zpipes_msg_count (zpipes_msg_t *self);
+    zpipes_msg_size (zpipes_msg_t *self);
 void
-    zpipes_msg_set_count (zpipes_msg_t *self, uint32_t count);
+    zpipes_msg_set_size (zpipes_msg_t *self, uint32_t size);
 
 //  Get/set the timeout field
 uint32_t

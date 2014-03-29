@@ -41,6 +41,7 @@ struct _zpipes_msg_t {
     byte *ceiling;                      //  Valid upper limit for read pointer
     char *pipename;                     //  Name of pipe
     char *reason;                       //  Reason for failure
+    uint32_t count;                     //  Number of bytes to read
     uint32_t timeout;                   //  Timeout, msecs, or zero
     zchunk_t *chunk;                    //  Chunk of data
 };
@@ -261,22 +262,26 @@ zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
             GET_STRING (self->pipename);
             break;
 
-        case ZPIPES_MSG_OUTPUT:
-            GET_STRING (self->pipename);
-            break;
-
-        case ZPIPES_MSG_READY:
+        case ZPIPES_MSG_INPUT_OK:
             break;
 
         case ZPIPES_MSG_FAILED:
             GET_STRING (self->reason);
             break;
 
-        case ZPIPES_MSG_FETCH:
+        case ZPIPES_MSG_OUTPUT:
+            GET_STRING (self->pipename);
+            break;
+
+        case ZPIPES_MSG_OUTPUT_OK:
+            break;
+
+        case ZPIPES_MSG_READ:
+            GET_NUMBER4 (self->count);
             GET_NUMBER4 (self->timeout);
             break;
 
-        case ZPIPES_MSG_FETCHED:
+        case ZPIPES_MSG_READ_OK:
             {
                 size_t chunk_size;
                 GET_NUMBER4 (chunk_size);
@@ -293,7 +298,7 @@ zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
         case ZPIPES_MSG_TIMEOUT:
             break;
 
-        case ZPIPES_MSG_STORE:
+        case ZPIPES_MSG_WRITE:
             {
                 size_t chunk_size;
                 GET_NUMBER4 (chunk_size);
@@ -302,15 +307,16 @@ zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
                 self->chunk = zchunk_new (self->needle, chunk_size);
                 self->needle += chunk_size;
             }
+            GET_NUMBER4 (self->timeout);
             break;
 
-        case ZPIPES_MSG_STORED:
+        case ZPIPES_MSG_WRITE_OK:
             break;
 
         case ZPIPES_MSG_CLOSE:
             break;
 
-        case ZPIPES_MSG_CLOSED:
+        case ZPIPES_MSG_CLOSE_OK:
             break;
 
         default:
@@ -382,14 +388,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 frame_size += strlen (self->pipename);
             break;
             
-        case ZPIPES_MSG_OUTPUT:
-            //  pipename is a string with 1-byte length
-            frame_size++;       //  Size is one octet
-            if (self->pipename)
-                frame_size += strlen (self->pipename);
-            break;
-            
-        case ZPIPES_MSG_READY:
+        case ZPIPES_MSG_INPUT_OK:
             break;
             
         case ZPIPES_MSG_FAILED:
@@ -399,12 +398,24 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 frame_size += strlen (self->reason);
             break;
             
-        case ZPIPES_MSG_FETCH:
+        case ZPIPES_MSG_OUTPUT:
+            //  pipename is a string with 1-byte length
+            frame_size++;       //  Size is one octet
+            if (self->pipename)
+                frame_size += strlen (self->pipename);
+            break;
+            
+        case ZPIPES_MSG_OUTPUT_OK:
+            break;
+            
+        case ZPIPES_MSG_READ:
+            //  count is a 4-byte integer
+            frame_size += 4;
             //  timeout is a 4-byte integer
             frame_size += 4;
             break;
             
-        case ZPIPES_MSG_FETCHED:
+        case ZPIPES_MSG_READ_OK:
             //  chunk is a chunk with 4-byte length
             frame_size += 4;
             if (self->chunk)
@@ -417,20 +428,22 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
         case ZPIPES_MSG_TIMEOUT:
             break;
             
-        case ZPIPES_MSG_STORE:
+        case ZPIPES_MSG_WRITE:
             //  chunk is a chunk with 4-byte length
             frame_size += 4;
             if (self->chunk)
                 frame_size += zchunk_size (self->chunk);
+            //  timeout is a 4-byte integer
+            frame_size += 4;
             break;
             
-        case ZPIPES_MSG_STORED:
+        case ZPIPES_MSG_WRITE_OK:
             break;
             
         case ZPIPES_MSG_CLOSE:
             break;
             
-        case ZPIPES_MSG_CLOSED:
+        case ZPIPES_MSG_CLOSE_OK:
             break;
             
         default:
@@ -453,15 +466,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 PUT_NUMBER1 (0);    //  Empty string
             break;
 
-        case ZPIPES_MSG_OUTPUT:
-            if (self->pipename) {
-                PUT_STRING (self->pipename);
-            }
-            else
-                PUT_NUMBER1 (0);    //  Empty string
-            break;
-
-        case ZPIPES_MSG_READY:
+        case ZPIPES_MSG_INPUT_OK:
             break;
 
         case ZPIPES_MSG_FAILED:
@@ -472,11 +477,23 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
                 PUT_NUMBER1 (0);    //  Empty string
             break;
 
-        case ZPIPES_MSG_FETCH:
+        case ZPIPES_MSG_OUTPUT:
+            if (self->pipename) {
+                PUT_STRING (self->pipename);
+            }
+            else
+                PUT_NUMBER1 (0);    //  Empty string
+            break;
+
+        case ZPIPES_MSG_OUTPUT_OK:
+            break;
+
+        case ZPIPES_MSG_READ:
+            PUT_NUMBER4 (self->count);
             PUT_NUMBER4 (self->timeout);
             break;
 
-        case ZPIPES_MSG_FETCHED:
+        case ZPIPES_MSG_READ_OK:
             if (self->chunk) {
                 PUT_NUMBER4 (zchunk_size (self->chunk));
                 memcpy (self->needle,
@@ -494,7 +511,7 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
         case ZPIPES_MSG_TIMEOUT:
             break;
 
-        case ZPIPES_MSG_STORE:
+        case ZPIPES_MSG_WRITE:
             if (self->chunk) {
                 PUT_NUMBER4 (zchunk_size (self->chunk));
                 memcpy (self->needle,
@@ -504,15 +521,16 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
             }
             else
                 PUT_NUMBER4 (0);    //  Empty chunk
+            PUT_NUMBER4 (self->timeout);
             break;
 
-        case ZPIPES_MSG_STORED:
+        case ZPIPES_MSG_WRITE_OK:
             break;
 
         case ZPIPES_MSG_CLOSE:
             break;
 
-        case ZPIPES_MSG_CLOSED:
+        case ZPIPES_MSG_CLOSE_OK:
             break;
 
     }
@@ -576,27 +594,13 @@ zpipes_msg_send_input (
 
 
 //  --------------------------------------------------------------------------
-//  Send the OUTPUT to the socket in one step
+//  Send the INPUT_OK to the socket in one step
 
 int
-zpipes_msg_send_output (
-    void *output,
-    const char *pipename)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
-    zpipes_msg_set_pipename (self, pipename);
-    return zpipes_msg_send (&self, output);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Send the READY to the socket in one step
-
-int
-zpipes_msg_send_ready (
+zpipes_msg_send_input_ok (
     void *output)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READY);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT_OK);
     return zpipes_msg_send (&self, output);
 }
 
@@ -616,28 +620,56 @@ zpipes_msg_send_failed (
 
 
 //  --------------------------------------------------------------------------
-//  Send the FETCH to the socket in one step
+//  Send the OUTPUT to the socket in one step
 
 int
-zpipes_msg_send_fetch (
+zpipes_msg_send_output (
     void *output,
+    const char *pipename)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
+    zpipes_msg_set_pipename (self, pipename);
+    return zpipes_msg_send (&self, output);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Send the OUTPUT_OK to the socket in one step
+
+int
+zpipes_msg_send_output_ok (
+    void *output)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_OK);
+    return zpipes_msg_send (&self, output);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Send the READ to the socket in one step
+
+int
+zpipes_msg_send_read (
+    void *output,
+    uint32_t count,
     uint32_t timeout)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_FETCH);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ);
+    zpipes_msg_set_count (self, count);
     zpipes_msg_set_timeout (self, timeout);
     return zpipes_msg_send (&self, output);
 }
 
 
 //  --------------------------------------------------------------------------
-//  Send the FETCHED to the socket in one step
+//  Send the READ_OK to the socket in one step
 
 int
-zpipes_msg_send_fetched (
+zpipes_msg_send_read_ok (
     void *output,
     zchunk_t *chunk)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_FETCHED);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_OK);
     zchunk_t *chunk_copy = zchunk_dup (chunk);
     zpipes_msg_set_chunk (self, &chunk_copy);
     return zpipes_msg_send (&self, output);
@@ -669,28 +701,30 @@ zpipes_msg_send_timeout (
 
 
 //  --------------------------------------------------------------------------
-//  Send the STORE to the socket in one step
+//  Send the WRITE to the socket in one step
 
 int
-zpipes_msg_send_store (
+zpipes_msg_send_write (
     void *output,
-    zchunk_t *chunk)
+    zchunk_t *chunk,
+    uint32_t timeout)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_STORE);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE);
     zchunk_t *chunk_copy = zchunk_dup (chunk);
     zpipes_msg_set_chunk (self, &chunk_copy);
+    zpipes_msg_set_timeout (self, timeout);
     return zpipes_msg_send (&self, output);
 }
 
 
 //  --------------------------------------------------------------------------
-//  Send the STORED to the socket in one step
+//  Send the WRITE_OK to the socket in one step
 
 int
-zpipes_msg_send_stored (
+zpipes_msg_send_write_ok (
     void *output)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_STORED);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_OK);
     return zpipes_msg_send (&self, output);
 }
 
@@ -708,13 +742,13 @@ zpipes_msg_send_close (
 
 
 //  --------------------------------------------------------------------------
-//  Send the CLOSED to the socket in one step
+//  Send the CLOSE_OK to the socket in one step
 
 int
-zpipes_msg_send_closed (
+zpipes_msg_send_close_ok (
     void *output)
 {
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSED);
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE_OK);
     return zpipes_msg_send (&self, output);
 }
 
@@ -737,22 +771,26 @@ zpipes_msg_dup (zpipes_msg_t *self)
             copy->pipename = self->pipename? strdup (self->pipename): NULL;
             break;
 
-        case ZPIPES_MSG_OUTPUT:
-            copy->pipename = self->pipename? strdup (self->pipename): NULL;
-            break;
-
-        case ZPIPES_MSG_READY:
+        case ZPIPES_MSG_INPUT_OK:
             break;
 
         case ZPIPES_MSG_FAILED:
             copy->reason = self->reason? strdup (self->reason): NULL;
             break;
 
-        case ZPIPES_MSG_FETCH:
+        case ZPIPES_MSG_OUTPUT:
+            copy->pipename = self->pipename? strdup (self->pipename): NULL;
+            break;
+
+        case ZPIPES_MSG_OUTPUT_OK:
+            break;
+
+        case ZPIPES_MSG_READ:
+            copy->count = self->count;
             copy->timeout = self->timeout;
             break;
 
-        case ZPIPES_MSG_FETCHED:
+        case ZPIPES_MSG_READ_OK:
             copy->chunk = self->chunk? zchunk_dup (self->chunk): NULL;
             break;
 
@@ -762,17 +800,18 @@ zpipes_msg_dup (zpipes_msg_t *self)
         case ZPIPES_MSG_TIMEOUT:
             break;
 
-        case ZPIPES_MSG_STORE:
+        case ZPIPES_MSG_WRITE:
             copy->chunk = self->chunk? zchunk_dup (self->chunk): NULL;
+            copy->timeout = self->timeout;
             break;
 
-        case ZPIPES_MSG_STORED:
+        case ZPIPES_MSG_WRITE_OK:
             break;
 
         case ZPIPES_MSG_CLOSE:
             break;
 
-        case ZPIPES_MSG_CLOSED:
+        case ZPIPES_MSG_CLOSE_OK:
             break;
 
     }
@@ -797,16 +836,8 @@ zpipes_msg_dump (zpipes_msg_t *self)
                 printf ("    pipename=\n");
             break;
             
-        case ZPIPES_MSG_OUTPUT:
-            puts ("OUTPUT:");
-            if (self->pipename)
-                printf ("    pipename='%s'\n", self->pipename);
-            else
-                printf ("    pipename=\n");
-            break;
-            
-        case ZPIPES_MSG_READY:
-            puts ("READY:");
+        case ZPIPES_MSG_INPUT_OK:
+            puts ("INPUT_OK:");
             break;
             
         case ZPIPES_MSG_FAILED:
@@ -817,13 +848,26 @@ zpipes_msg_dump (zpipes_msg_t *self)
                 printf ("    reason=\n");
             break;
             
-        case ZPIPES_MSG_FETCH:
-            puts ("FETCH:");
+        case ZPIPES_MSG_OUTPUT:
+            puts ("OUTPUT:");
+            if (self->pipename)
+                printf ("    pipename='%s'\n", self->pipename);
+            else
+                printf ("    pipename=\n");
+            break;
+            
+        case ZPIPES_MSG_OUTPUT_OK:
+            puts ("OUTPUT_OK:");
+            break;
+            
+        case ZPIPES_MSG_READ:
+            puts ("READ:");
+            printf ("    count=%ld\n", (long) self->count);
             printf ("    timeout=%ld\n", (long) self->timeout);
             break;
             
-        case ZPIPES_MSG_FETCHED:
-            puts ("FETCHED:");
+        case ZPIPES_MSG_READ_OK:
+            puts ("READ_OK:");
             printf ("    chunk={\n");
             if (self->chunk)
                 zchunk_print (self->chunk);
@@ -840,26 +884,27 @@ zpipes_msg_dump (zpipes_msg_t *self)
             puts ("TIMEOUT:");
             break;
             
-        case ZPIPES_MSG_STORE:
-            puts ("STORE:");
+        case ZPIPES_MSG_WRITE:
+            puts ("WRITE:");
             printf ("    chunk={\n");
             if (self->chunk)
                 zchunk_print (self->chunk);
             else
                 printf ("(NULL)\n");
             printf ("    }\n");
+            printf ("    timeout=%ld\n", (long) self->timeout);
             break;
             
-        case ZPIPES_MSG_STORED:
-            puts ("STORED:");
+        case ZPIPES_MSG_WRITE_OK:
+            puts ("WRITE_OK:");
             break;
             
         case ZPIPES_MSG_CLOSE:
             puts ("CLOSE:");
             break;
             
-        case ZPIPES_MSG_CLOSED:
-            puts ("CLOSED:");
+        case ZPIPES_MSG_CLOSE_OK:
+            puts ("CLOSE_OK:");
             break;
             
     }
@@ -912,20 +957,23 @@ zpipes_msg_command (zpipes_msg_t *self)
         case ZPIPES_MSG_INPUT:
             return ("INPUT");
             break;
-        case ZPIPES_MSG_OUTPUT:
-            return ("OUTPUT");
-            break;
-        case ZPIPES_MSG_READY:
-            return ("READY");
+        case ZPIPES_MSG_INPUT_OK:
+            return ("INPUT_OK");
             break;
         case ZPIPES_MSG_FAILED:
             return ("FAILED");
             break;
-        case ZPIPES_MSG_FETCH:
-            return ("FETCH");
+        case ZPIPES_MSG_OUTPUT:
+            return ("OUTPUT");
             break;
-        case ZPIPES_MSG_FETCHED:
-            return ("FETCHED");
+        case ZPIPES_MSG_OUTPUT_OK:
+            return ("OUTPUT_OK");
+            break;
+        case ZPIPES_MSG_READ:
+            return ("READ");
+            break;
+        case ZPIPES_MSG_READ_OK:
+            return ("READ_OK");
             break;
         case ZPIPES_MSG_END_OF_PIPE:
             return ("END_OF_PIPE");
@@ -933,17 +981,17 @@ zpipes_msg_command (zpipes_msg_t *self)
         case ZPIPES_MSG_TIMEOUT:
             return ("TIMEOUT");
             break;
-        case ZPIPES_MSG_STORE:
-            return ("STORE");
+        case ZPIPES_MSG_WRITE:
+            return ("WRITE");
             break;
-        case ZPIPES_MSG_STORED:
-            return ("STORED");
+        case ZPIPES_MSG_WRITE_OK:
+            return ("WRITE_OK");
             break;
         case ZPIPES_MSG_CLOSE:
             return ("CLOSE");
             break;
-        case ZPIPES_MSG_CLOSED:
-            return ("CLOSED");
+        case ZPIPES_MSG_CLOSE_OK:
+            return ("CLOSE_OK");
             break;
     }
     return "?";
@@ -992,6 +1040,24 @@ zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...)
     free (self->reason);
     self->reason = zsys_vprintf (format, argptr);
     va_end (argptr);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Get/set the count field
+
+uint32_t 
+zpipes_msg_count (zpipes_msg_t *self)
+{
+    assert (self);
+    return self->count;
+}
+
+void
+zpipes_msg_set_count (zpipes_msg_t *self, uint32_t count)
+{
+    assert (self);
+    self->count = count;
 }
 
 
@@ -1096,27 +1162,7 @@ zpipes_msg_test (bool verbose)
         assert (streq (zpipes_msg_pipename (self), "Life is short but Now lasts for ever"));
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
-    
-    //  Check that _dup works on empty message
-    copy = zpipes_msg_dup (self);
-    assert (copy);
-    zpipes_msg_destroy (&copy);
-
-    zpipes_msg_set_pipename (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
-
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_pipename (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
-    self = zpipes_msg_new (ZPIPES_MSG_READY);
+    self = zpipes_msg_new (ZPIPES_MSG_INPUT_OK);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);
@@ -1154,13 +1200,52 @@ zpipes_msg_test (bool verbose)
         assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_FETCH);
+    self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);
     assert (copy);
     zpipes_msg_destroy (&copy);
 
+    zpipes_msg_set_pipename (self, "Life is short but Now lasts for ever");
+    //  Send twice from same object
+    zpipes_msg_send_again (self, output);
+    zpipes_msg_send (&self, output);
+
+    for (instance = 0; instance < 2; instance++) {
+        self = zpipes_msg_recv (input);
+        assert (self);
+        assert (zpipes_msg_routing_id (self));
+        
+        assert (streq (zpipes_msg_pipename (self), "Life is short but Now lasts for ever"));
+        zpipes_msg_destroy (&self);
+    }
+    self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_OK);
+    
+    //  Check that _dup works on empty message
+    copy = zpipes_msg_dup (self);
+    assert (copy);
+    zpipes_msg_destroy (&copy);
+
+    //  Send twice from same object
+    zpipes_msg_send_again (self, output);
+    zpipes_msg_send (&self, output);
+
+    for (instance = 0; instance < 2; instance++) {
+        self = zpipes_msg_recv (input);
+        assert (self);
+        assert (zpipes_msg_routing_id (self));
+        
+        zpipes_msg_destroy (&self);
+    }
+    self = zpipes_msg_new (ZPIPES_MSG_READ);
+    
+    //  Check that _dup works on empty message
+    copy = zpipes_msg_dup (self);
+    assert (copy);
+    zpipes_msg_destroy (&copy);
+
+    zpipes_msg_set_count (self, 123);
     zpipes_msg_set_timeout (self, 123);
     //  Send twice from same object
     zpipes_msg_send_again (self, output);
@@ -1171,18 +1256,19 @@ zpipes_msg_test (bool verbose)
         assert (self);
         assert (zpipes_msg_routing_id (self));
         
+        assert (zpipes_msg_count (self) == 123);
         assert (zpipes_msg_timeout (self) == 123);
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_FETCHED);
+    self = zpipes_msg_new (ZPIPES_MSG_READ_OK);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    zchunk_t *fetched_chunk = zchunk_new ("Captcha Diem", 12);
-    zpipes_msg_set_chunk (self, &fetched_chunk);
+    zchunk_t *read_ok_chunk = zchunk_new ("Captcha Diem", 12);
+    zpipes_msg_set_chunk (self, &read_ok_chunk);
     //  Send twice from same object
     zpipes_msg_send_again (self, output);
     zpipes_msg_send (&self, output);
@@ -1231,15 +1317,16 @@ zpipes_msg_test (bool verbose)
         
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_STORE);
+    self = zpipes_msg_new (ZPIPES_MSG_WRITE);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    zchunk_t *store_chunk = zchunk_new ("Captcha Diem", 12);
-    zpipes_msg_set_chunk (self, &store_chunk);
+    zchunk_t *write_chunk = zchunk_new ("Captcha Diem", 12);
+    zpipes_msg_set_chunk (self, &write_chunk);
+    zpipes_msg_set_timeout (self, 123);
     //  Send twice from same object
     zpipes_msg_send_again (self, output);
     zpipes_msg_send (&self, output);
@@ -1250,9 +1337,10 @@ zpipes_msg_test (bool verbose)
         assert (zpipes_msg_routing_id (self));
         
         assert (memcmp (zchunk_data (zpipes_msg_chunk (self)), "Captcha Diem", 12) == 0);
+        assert (zpipes_msg_timeout (self) == 123);
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_STORED);
+    self = zpipes_msg_new (ZPIPES_MSG_WRITE_OK);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);
@@ -1288,7 +1376,7 @@ zpipes_msg_test (bool verbose)
         
         zpipes_msg_destroy (&self);
     }
-    self = zpipes_msg_new (ZPIPES_MSG_CLOSED);
+    self = zpipes_msg_new (ZPIPES_MSG_CLOSE_OK);
     
     //  Check that _dup works on empty message
     copy = zpipes_msg_dup (self);

@@ -145,12 +145,12 @@ typedef enum {
     output_event = 2,
     exception_event = 3,
     _other_event = 4,
-    fetch_event = 5,
+    read_event = 5,
     close_event = 6,
     have_chunk_event = 7,
     pipe_terminated_event = 8,
     timeout_expired_event = 9,
-    store_event = 10
+    write_event = 10
 } event_t;
 
 //  Names for animation
@@ -170,12 +170,12 @@ s_event_name [] = {
     "OUTPUT",
     "exception",
     "$other",
-    "FETCH",
+    "READ",
     "CLOSE",
     "have chunk",
     "pipe terminated",
     "timeout expired",
-    "STORE"
+    "WRITE"
 };
  
 
@@ -414,11 +414,11 @@ s_client_accept (s_client_t *client, zpipes_msg_t *request)
         case ZPIPES_MSG_OUTPUT:
             return output_event;
             break;
-        case ZPIPES_MSG_FETCH:
-            return fetch_event;
+        case ZPIPES_MSG_READ:
+            return read_event;
             break;
-        case ZPIPES_MSG_STORE:
-            return store_event;
+        case ZPIPES_MSG_WRITE:
+            return write_event;
             break;
         case ZPIPES_MSG_CLOSE:
             return close_event;
@@ -571,9 +571,9 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         open_pipe_for_input (&client->client);
                     }
                     if (!client->exception) {
-                        //  send ready
-                        zclock_log ("%6d:         $ send ready", client->client_id);
-                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_READY);
+                        //  send input_ok
+                        zclock_log ("%6d:         $ send input_ok", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_INPUT_OK);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -594,9 +594,9 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         open_pipe_for_output (&client->client);
                     }
                     if (!client->exception) {
-                        //  send ready
-                        zclock_log ("%6d:         $ send ready", client->client_id);
-                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_READY);
+                        //  send output_ok
+                        zclock_log ("%6d:         $ send output_ok", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_OUTPUT_OK);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -639,7 +639,7 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                 break;
 
             case reading_state:
-                if (client->event == fetch_event) {
+                if (client->event == read_event) {
                     if (!client->exception) {
                         //  expect chunk on pipe
                         zclock_log ("%6d:         $ expect chunk on pipe", client->client_id);
@@ -658,9 +658,9 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         close_pipe (&client->client);
                     }
                     if (!client->exception) {
-                        //  send closed
-                        zclock_log ("%6d:         $ send closed", client->client_id);
-                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_CLOSED);
+                        //  send close_ok
+                        zclock_log ("%6d:         $ send close_ok", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_CLOSE_OK);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -713,9 +713,9 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         fetch_chunk_from_pipe (&client->client);
                     }
                     if (!client->exception) {
-                        //  send fetched
-                        zclock_log ("%6d:         $ send fetched", client->client_id);
-                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_FETCHED);
+                        //  send read_ok
+                        zclock_log ("%6d:         $ send read_ok", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_READ_OK);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -804,16 +804,16 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                 break;
 
             case writing_state:
-                if (client->event == store_event) {
+                if (client->event == write_event) {
                     if (!client->exception) {
                         //  store chunk to pipe
                         zclock_log ("%6d:         $ store chunk to pipe", client->client_id);
                         store_chunk_to_pipe (&client->client);
                     }
                     if (!client->exception) {
-                        //  send stored
-                        zclock_log ("%6d:         $ send stored", client->client_id);
-                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_STORED);
+                        //  send write_ok
+                        zclock_log ("%6d:         $ send write_ok", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_WRITE_OK);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);
@@ -834,9 +834,9 @@ s_server_client_execute (s_server_t *self, s_client_t *client, int event)
                         close_pipe (&client->client);
                     }
                     if (!client->exception) {
-                        //  send closed
-                        zclock_log ("%6d:         $ send closed", client->client_id);
-                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_CLOSED);
+                        //  send close_ok
+                        zclock_log ("%6d:         $ send close_ok", client->client_id);
+                        zpipes_msg_set_id (client->client.reply, ZPIPES_MSG_CLOSE_OK);
                         zpipes_msg_send (&(client->client.reply), self->router);
                         client->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (client->client.reply, client->routing_id);

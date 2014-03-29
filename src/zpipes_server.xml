@@ -12,21 +12,21 @@
     <state name = "start">
         <event name = "input" next = "reading">
             <action name = "open pipe for input" />
-            <action name = "send" message = "ready" />
+            <action name = "send" message = "input ok" />
         </event>
         <event name = "output" next = "writing">
             <action name = "open pipe for output" />
-            <action name = "send" message = "ready" />
+            <action name = "send" message = "output ok" />
         </event>
     </state>
 
     <state name = "reading">
-        <event name = "fetch" next = "expecting chunk">
+        <event name = "read" next = "expecting chunk">
             <action name = "expect chunk on pipe" />
         </event>
         <event name = "close">
             <action name = "close pipe" />
-            <action name = "send" message = "closed" />
+            <action name = "send" message = "close ok" />
             <action name = "terminate" />
         </event>
     </state>
@@ -35,7 +35,7 @@
         <event name = "have chunk" next = "reading">
             <action name = "clear pending reads" />
             <action name = "fetch chunk from pipe" />
-            <action name = "send" message = "fetched" />
+            <action name = "send" message = "read ok" />
         </event>
         <event name = "pipe terminated" next = "reading">
             <action name = "clear pending reads" />
@@ -48,13 +48,13 @@
     </state>
     
     <state name = "writing">
-        <event name = "store" next = "writing">
+        <event name = "write" next = "writing">
             <action name = "store chunk to pipe" />
-            <action name = "send" message = "stored" />
+            <action name = "send" message = "write ok" />
         </event>
         <event name = "close">
             <action name = "close pipe" />
-            <action name = "send" message = "closed" />
+            <action name = "send" message = "close ok" />
             <action name = "terminate" />
         </event>
     </state>

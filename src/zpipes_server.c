@@ -292,15 +292,15 @@ zpipes_server_test (bool verbose)
     
     //  Simple reader/writer test
     zpipes_msg_send_output (writer, "hello");
-    s_expect_reply (writer, ZPIPES_MSG_READY);
+    s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK);
     
     zpipes_msg_send_input (reader, "hello");
-    s_expect_reply (reader, ZPIPES_MSG_READY);
+    s_expect_reply (reader, ZPIPES_MSG_INPUT_OK);
     
     //  Pipeline three read requests
-    zpipes_msg_send_fetch (reader, 100);
-    zpipes_msg_send_fetch (reader, 100);
-    zpipes_msg_send_fetch (reader, 100);
+    zpipes_msg_send_read (reader, 1000, 100);
+    zpipes_msg_send_read (reader, 1000, 100);
+    zpipes_msg_send_read (reader, 1000, 100);
 
     //  First will return with a timeout
     s_expect_reply (reader, ZPIPES_MSG_TIMEOUT);
@@ -308,23 +308,23 @@ zpipes_server_test (bool verbose)
     //  Store a chunk
     zchunk_t *chunk = zchunk_new ("World", 5);
     assert (chunk);
-    zpipes_msg_send_store (writer, chunk);
+    zpipes_msg_send_write (writer, chunk, 100);
     zchunk_destroy (&chunk);
-    s_expect_reply (writer, ZPIPES_MSG_STORED);
+    s_expect_reply (writer, ZPIPES_MSG_WRITE_OK);
     
     //  Second will return with a chunk
-    s_expect_reply (reader, ZPIPES_MSG_FETCHED);
+    s_expect_reply (reader, ZPIPES_MSG_READ_OK);
 
     //  Close writer
     zpipes_msg_send_close (writer);
-    s_expect_reply (writer, ZPIPES_MSG_CLOSED);
+    s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK);
     
     //  Third will return empty
     s_expect_reply (reader, ZPIPES_MSG_END_OF_PIPE);
 
     //  Close reader
     zpipes_msg_send_close (reader);
-    s_expect_reply (reader, ZPIPES_MSG_CLOSED);
+    s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK);
 
     zpipes_server_destroy (&self);
     zctx_destroy (&ctx);

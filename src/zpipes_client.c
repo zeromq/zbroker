@@ -1,5 +1,5 @@
 /*  =========================================================================
-    zpipes_client.c - simple API for zpipes client applications
+    zpipes_client.c - API for zpipes client applications
 
     Copyright (c) the Contributors as noted in the AUTHORS file.
     This file is part of zserver, the ZeroMQ server project.
@@ -12,7 +12,7 @@
 
 /*
 @header
-    tbd
+    Provides a stream-based API to the ZPIPES infrastructure.
 @discuss
 @end
 */
@@ -26,6 +26,7 @@ struct _zpipes_client_t {
     zctx_t *ctx;                //  Private CZMQ context
     char *name;                 //  Name of named zpipe
     void *dealer;               //  Dealer socket to zpipes server
+    zchunk_t *chunk;            //  Current received chunk, if any
     int error;                  //  Last error cause
 };
 
@@ -63,13 +64,16 @@ zpipes_client_new (const char *server_name, const char *pipe_name)
     assert (rc == 0);
 
     //  Open pipe for reading or writing
-    if (*pipe_name == '>')
+    if (*pipe_name == '>') {
         zpipes_msg_send_output (self->dealer, pipe_name + 1);
-    else
+        if (s_expect_reply (self, ZPIPES_MSG_OUTPUT_OK))
+            assert (false);     //  Cannot happen in current use case
+    }
+    else {
         zpipes_msg_send_input (self->dealer, pipe_name);
-
-    if (s_expect_reply (self, ZPIPES_MSG_READY))
-        assert (false);         //  Cannot happen in current use case
+        if (s_expect_reply (self, ZPIPES_MSG_INPUT_OK))
+            assert (false);     //  Cannot happen in current use case
+    }
     return self;
 }
 
@@ -85,9 +89,10 @@ zpipes_client_destroy (zpipes_client_t **self_p)
         zpipes_client_t *self = *self_p;
         if (self->dealer) {
             zpipes_msg_send_close (self->dealer);
-            if (s_expect_reply (self, ZPIPES_MSG_CLOSED))
+            if (s_expect_reply (self, ZPIPES_MSG_CLOSE_OK))
                 assert (false);     //  Cannot happen in current use case
         }
+        zchunk_destroy (&self->chunk);
         zctx_destroy (&self->ctx);
         free (self);
         *self_p = NULL;
@@ -105,9 +110,9 @@ zpipes_client_write (zpipes_client_t *self, void *data, size_t size)
     assert (self);
     zchunk_t *chunk = zchunk_new (data, size);
     assert (chunk);
-    zpipes_msg_send_store (self->dealer, chunk);
+    zpipes_msg_send_write (self->dealer, chunk, 0);
     zchunk_destroy (&chunk);
-    if (s_expect_reply (self, ZPIPES_MSG_STORED)) {
+    if (s_expect_reply (self, ZPIPES_MSG_WRITE_OK)) {
         self->error = EBADF;
         return -1;
     }
@@ -124,22 +129,22 @@ zpipes_client_write (zpipes_client_t *self, void *data, size_t size)
 //  zpipes_client_error(), which will be EINTR, EAGAIN, or EBADF.
 
 ssize_t
-zpipes_client_read (zpipes_client_t *self, void *data, size_t max_size, int timeout)
+zpipes_client_read (zpipes_client_t *self, void *data, size_t count, int timeout)
 {
     assert (self);
 
-    zpipes_msg_send_fetch (self->dealer, timeout);
+    zpipes_msg_send_read (self->dealer, count, timeout);
     zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
     if (!reply) {
         self->error = EINTR;
         return -1;              //  Interrupted
     }
     ssize_t bytes = 0;
-    if (zpipes_msg_id (reply) == ZPIPES_MSG_FETCHED) {
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_READ_OK) {
         zchunk_t *chunk = zpipes_msg_chunk (reply);
         bytes = zchunk_size (chunk);
-        if (bytes > max_size)
-            bytes = max_size;
+        if (bytes > count)
+            bytes = count;
         memcpy (data, zchunk_data (chunk), bytes);
     }
     else

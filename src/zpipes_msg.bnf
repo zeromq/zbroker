@@ -16,43 +16,48 @@ The following ABNF grammar defines the ZPIPES protocol:
     signature       = %xAA %xA0             ; two octets
     pipename        = string                ; Name of pipe
 
-    ;         Create a new pipe for writing
-    output          = signature %d2 pipename
-    pipename        = string                ; Name of pipe
-
-    ;         Input or output request was successful
-    ready           = signature %d3
+    ;         Input request was successful
+    input_ok        = signature %d2
 
     ;         Input or output request failed
-    failed          = signature %d4 reason
+    failed          = signature %d3 reason
     reason          = string                ; Reason for failure
 
-    ;         Read next chunk of data from pipe
-    fetch           = signature %d5 timeout
+    ;         Create a new pipe for writing
+    output          = signature %d4 pipename
+    pipename        = string                ; Name of pipe
+
+    ;         Output request was successful
+    output_ok       = signature %d5
+
+    ;         Read a chunk of data from pipe
+    read            = signature %d6 count timeout
+    count           = number-4              ; Number of bytes to read
     timeout         = number-4              ; Timeout, msecs, or zero
 
-    ;         Have data from pipe
-    fetched         = signature %d6 chunk
+    ;         Read was successful
+    read_ok         = signature %d7 chunk
     chunk           = chunk                 ; Chunk of data
 
     ;         Pipe is closed, no more data
-    end_of_pipe     = signature %d7
+    end_of_pipe     = signature %d8
 
-    ;         Get or put ended with timeout
-    timeout         = signature %d8
+    ;         Read or write ended with timeout
+    timeout         = signature %d9
 
     ;         Write chunk of data to pipe
-    store           = signature %d9 chunk
+    write           = signature %d10 chunk timeout
     chunk           = chunk                 ; Chunk of data
+    timeout         = number-4              ; Timeout, msecs, or zero
 
-    ;         Store was successful
-    stored          = signature %d10
+    ;         Write was successful
+    write_ok        = signature %d11
 
     ;         Close pipe
-    close           = signature %d11
+    close           = signature %d12
 
     ;         Close was successful
-    closed          = signature %d12
+    close_ok        = signature %d13
 
     ; A chunk has 4-octet length + binary contents
     chunk           = number-4 *OCTET

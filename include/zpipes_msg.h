@@ -12,7 +12,6 @@
     * The XML model used for this code generation: zpipes_msg.xml
     * The code generation script that built this file: zproto_codec_c
     ************************************************************************
-    
     Copyright (c) the Contributors as noted in the AUTHORS file.       
     This file is part of zbroker, the ZeroMQ broker project.           
                                                                        
@@ -30,47 +29,52 @@
     INPUT - Create a new pipe for reading
         pipename            string      Name of pipe
 
-    OUTPUT - Create a new pipe for writing
-        pipename            string      Name of pipe
-
-    READY - Input or output request was successful
+    INPUT_OK - Input request was successful
 
     FAILED - Input or output request failed
         reason              string      Reason for failure
 
-    FETCH - Read next chunk of data from pipe
+    OUTPUT - Create a new pipe for writing
+        pipename            string      Name of pipe
+
+    OUTPUT_OK - Output request was successful
+
+    READ - Read a chunk of data from pipe
+        size                number 4    Number of bytes to read
         timeout             number 4    Timeout, msecs, or zero
 
-    FETCHED - Have data from pipe
+    READ_OK - Read was successful
         chunk               chunk       Chunk of data
 
     END_OF_PIPE - Pipe is closed, no more data
 
-    TIMEOUT - Get or put ended with timeout
+    TIMEOUT - Read or write ended with timeout
 
-    STORE - Write chunk of data to pipe
+    WRITE - Write chunk of data to pipe
         chunk               chunk       Chunk of data
+        timeout             number 4    Timeout, msecs, or zero
 
-    STORED - Store was successful
+    WRITE_OK - Write was successful
 
     CLOSE - Close pipe
 
-    CLOSED - Close was successful
+    CLOSE_OK - Close was successful
 */
 
 
 #define ZPIPES_MSG_INPUT                    1
-#define ZPIPES_MSG_OUTPUT                   2
-#define ZPIPES_MSG_READY                    3
-#define ZPIPES_MSG_FAILED                   4
-#define ZPIPES_MSG_FETCH                    5
-#define ZPIPES_MSG_FETCHED                  6
-#define ZPIPES_MSG_END_OF_PIPE              7
-#define ZPIPES_MSG_TIMEOUT                  8
-#define ZPIPES_MSG_STORE                    9
-#define ZPIPES_MSG_STORED                   10
-#define ZPIPES_MSG_CLOSE                    11
-#define ZPIPES_MSG_CLOSED                   12
+#define ZPIPES_MSG_INPUT_OK                 2
+#define ZPIPES_MSG_FAILED                   3
+#define ZPIPES_MSG_OUTPUT                   4
+#define ZPIPES_MSG_OUTPUT_OK                5
+#define ZPIPES_MSG_READ                     6
+#define ZPIPES_MSG_READ_OK                  7
+#define ZPIPES_MSG_END_OF_PIPE              8
+#define ZPIPES_MSG_TIMEOUT                  9
+#define ZPIPES_MSG_WRITE                    10
+#define ZPIPES_MSG_WRITE_OK                 11
+#define ZPIPES_MSG_CLOSE                    12
+#define ZPIPES_MSG_CLOSE_OK                 13
 
 #ifdef __cplusplus
 extern "C" {
@@ -125,28 +129,33 @@ int
     zpipes_msg_send_input (void *output,
         const char *pipename);
     
-//  Send the OUTPUT to the output in one step
+//  Send the INPUT_OK to the output in one step
 int
-    zpipes_msg_send_output (void *output,
-        const char *pipename);
-    
-//  Send the READY to the output in one step
-int
-    zpipes_msg_send_ready (void *output);
+    zpipes_msg_send_input_ok (void *output);
     
 //  Send the FAILED to the output in one step
 int
     zpipes_msg_send_failed (void *output,
         const char *reason);
     
-//  Send the FETCH to the output in one step
+//  Send the OUTPUT to the output in one step
 int
-    zpipes_msg_send_fetch (void *output,
+    zpipes_msg_send_output (void *output,
+        const char *pipename);
+    
+//  Send the OUTPUT_OK to the output in one step
+int
+    zpipes_msg_send_output_ok (void *output);
+    
+//  Send the READ to the output in one step
+int
+    zpipes_msg_send_read (void *output,
+        uint32_t size,
         uint32_t timeout);
     
-//  Send the FETCHED to the output in one step
+//  Send the READ_OK to the output in one step
 int
-    zpipes_msg_send_fetched (void *output,
+    zpipes_msg_send_read_ok (void *output,
         zchunk_t *chunk);
     
 //  Send the END_OF_PIPE to the output in one step
@@ -157,22 +166,23 @@ int
 int
     zpipes_msg_send_timeout (void *output);
     
-//  Send the STORE to the output in one step
+//  Send the WRITE to the output in one step
 int
-    zpipes_msg_send_store (void *output,
-        zchunk_t *chunk);
+    zpipes_msg_send_write (void *output,
+        zchunk_t *chunk,
+        uint32_t timeout);
     
-//  Send the STORED to the output in one step
+//  Send the WRITE_OK to the output in one step
 int
-    zpipes_msg_send_stored (void *output);
+    zpipes_msg_send_write_ok (void *output);
     
 //  Send the CLOSE to the output in one step
 int
     zpipes_msg_send_close (void *output);
     
-//  Send the CLOSED to the output in one step
+//  Send the CLOSE_OK to the output in one step
 int
-    zpipes_msg_send_closed (void *output);
+    zpipes_msg_send_close_ok (void *output);
     
 //  Duplicate the zpipes_msg message
 zpipes_msg_t *
@@ -207,6 +217,12 @@ const char *
     zpipes_msg_reason (zpipes_msg_t *self);
 void
     zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...);
+
+//  Get/set the size field
+uint32_t
+    zpipes_msg_size (zpipes_msg_t *self);
+void
+    zpipes_msg_set_size (zpipes_msg_t *self, uint32_t size);
 
 //  Get/set the timeout field
 uint32_t

@@ -3,66 +3,104 @@
     title = "ZPIPES server"
     proto = "zpipes_msg"
     script = "zproto_server_c"
-    header = "../include"
     >
     This is a server implementation for the ZPIPES protocol
     <include filename = "license.xml" />
 
     <!-- State machine for a client connection -->
     <state name = "start">
-        <event name = "input" next = "reading">
-            <action name = "open pipe for input" />
-            <action name = "send" message = "ready" />
-        </event>
         <event name = "output" next = "writing">
-            <action name = "open pipe for output" />
-            <action name = "send" message = "ready" />
+            <action name = "lookup or create pipe" />
+            <action name = "open pipe writer" />
+            <action name = "send" message = "output ok" />
+        </event>
+        <event name = "input" next = "reading">
+            <action name = "lookup or create pipe" />
+            <action name = "open pipe reader" />
+            <action name = "send" message = "input ok" />
         </event>
     </state>
 
-    <state name = "reading">
-        <event name = "fetch" next = "expecting chunk">
-            <action name = "expect chunk on pipe" />
+    Writing to a pipe waits until there is a reader, or a timeout. In this
+    state we can also close the pipe.
+
+    <state name = "writing">
+        <event name = "write" next = "expecting reader">
+            <action name = "expect pipe reader" />
         </event>
         <event name = "close">
-            <action name = "close pipe" />
-            <action name = "send" message = "closed" />
+            <action name = "close pipe writer" />
+            <action name = "send" message = "close ok" />
             <action name = "terminate" />
+        </event>
+        <event name = "have reader">
+            <!-- We get this if a reader arrives; ignore it -->
         </event>
     </state>
 
-    <state name = "expecting chunk">
-        <event name = "have chunk" next = "reading">
-            <action name = "clear pending reads" />
-            <action name = "fetch chunk from pipe" />
-            <action name = "send" message = "fetched" />
+    In this internal state, we either get a have reader event immediately,
+    or a wakeup event after the specified write timeout.
+
+    <state name = "expecting reader">
+        <!-- either immediately, or when a reader arrives -->
+        <event name = "have reader" next = "writing">
+            <action name = "pass data to reader" />
+            <action name = "send" message = "write ok" />
         </event>
-        <event name = "close">
-            <action name = "close pipe" />
-            <action name = "send" message = "closed" />
-            <action name = "terminate" />
-        </event>
-        <event name = "pipe terminated" next = "reading">
-            <action name = "clear pending reads" />
-            <action name = "send" message = "end of pipe" />
-        </event>
-        <event name = "timeout expired" next = "reading">
-            <action name = "clear pending reads" />
+        <!-- alarm wakeup event if nothing else happens -->
+        <event name = "wakeup" next = "writing">
             <action name = "send" message = "timeout" />
         </event>
     </state>
-    
-    <state name = "writing">
-        <event name = "store" next = "writing">
-            <action name = "store chunk to pipe" />
-            <action name = "send" message = "stored" />
+
+    Reading from a pipe waits until there is sufficient data, or a timeout.
+    In this state we can also close the pipe.
+
+    <state name = "reading">
+        <event name = "read" next = "expecting data">
+            <action name = "expect pipe data" />
+        </event>
+        <!-- exception event if the reader asked for zero bytes -->
+        <event name = "read nothing">
+            <action name = "send" message = "end of pipe" />
         </event>
         <event name = "close">
-            <action name = "close pipe" />
-            <action name = "send" message = "closed" />
+            <action name = "close pipe reader" />
+            <action name = "send" message = "close ok" />
             <action name = "terminate" />
         </event>
+        <event name = "have data">
+            <!-- We get this if a write happens; ignore it -->
+        </event>
     </state>
+
+    In this internal state, we either have data immediately, or a we are
+    woken up after the specified read timeout, or the writer closed our
+    pipe.
+
+    <state name = "expecting data">
+        <!-- either immediately, or when data arrives -->
+        <event name = "have data" next = "reading">
+            <action name = "collect data to send" />
+            <action name = "send" message = "read ok" />
+        </event>
+        <!-- exception event if not enough data yet -->
+        <event name = "not enough data" />
+
+        <!-- exception event if the writer closed the pipe -->
+        <event name = "pipe terminated" next = "reading">
+            <action name = "send" message = "end of pipe" />
+        </event>
+        <!-- alarm wakeup event if nothing else happens -->
+        <event name = "wakeup" next = "reading">
+            <action name = "send" message = "timeout" />
+        </event>
+    </state>
+
+    The defaults state handles an 'exception_event' (sends 'failed' back to
+    the client). It also specifies that any unrecognized protocol command
+    (an '$other' event) will also cause the engine to send 'failed' back to
+    the client.
 
     <state name = "defaults">
         <event name = "exception">
@@ -73,6 +111,9 @@
             <action name = "send" message = "failed" />
         </event>
     </state>
+
+    We can define API methods to pass commands back from the application
+    through to the engine.
 
     <!-- API methods
     <method name = "somename" return = "number">

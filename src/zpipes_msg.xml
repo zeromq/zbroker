@@ -9,14 +9,18 @@
     <grammar>
     ZPIPES = reader | writer
 
-    reader = input-command *read-command close-command
-    input-command = c:input ( s:input-ok | s:failed )
-    fetch-command = c:read ( s:read-ok | s:empty | s:timeout | s:failed )
-    close-command = c:close ( s:close-ok | s:failed )
+    reader = input-command *( read-command | ping-command )
+             close-command
+    input-command = c:input ( s:input-ok | s:input-failed )
+    read-command = c:read ( s:read-ok | s:read-end
+                          | s:read-timeout | s:read-failed )
+    close-command = c:close ( s:close-ok | s:close-failed )
 
     writer = output-command *write-command close-command
-    output = c:output ( s:output-ok | s:failed )
-    store = c:write ( s:write-ok | s:failed )
+    output-command = c:output ( s:output-ok | s:output-failed )
+    write-command = c:write ( s:write-ok
+                            | s:write-timeout | s:write-failed )
+    ping-command = c:ping s:ping-ok
     </grammar>
 
     <message name = "input">

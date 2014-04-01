@@ -25,7 +25,7 @@ int main (int argc, char *argv [])
     puts (COPYRIGHT);
     puts (NOWARRANTY);
 
-    if (argc == 0) {
+    if (argc == 1) {
         puts ("Usage: zbroker [-b] [configfile]");
         puts ("  -b  run broker as background process");
         puts ("  Default configfile is 'zbroker.cfg'");

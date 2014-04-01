@@ -36,12 +36,17 @@ struct _server_t {
     zhash_t *pipes;             //  Collection of pipes
 };
 
+//  Allocate properties and structures for a new server instance.
+//  Return 0 if OK, or -1 if there was an error.
+
 static int
 server_initialize (server_t *self)
 {
     self->pipes = zhash_new ();
     return 0;
 }
+
+//  Free properties and structures for a server instance
 
 static void
 server_terminate (server_t *self)
@@ -110,12 +115,18 @@ struct _client_t {
     zlist_t *queue;             //  Queue of chunks to be delivered
 };
 
+
+//  Allocate properties and structures for a new client connection and
+//  optionally set_next_event (). Return 0 if OK, or -1 on error.
+
 static int
 client_initialize (client_t *self)
 {
     self->queue = zlist_new ();
     return 0;
 }
+
+//  Free properties and structures for a client connection
 
 static void
 client_terminate (client_t *self)
@@ -154,11 +165,13 @@ static void
 open_pipe_writer (client_t *self)
 {
     assert (self->pipe);
-    if (self->pipe->writer == NULL)
+    if (self->pipe->writer == NULL) {
         self->pipe->writer = self;
+        set_next_event (self, ok_event);
+    }
     else
         //  Two writers on same pipe isn't allowed
-        raise_exception (self, exception_event);
+        set_next_event (self, error_event);
 }
 
 
@@ -172,13 +185,14 @@ open_pipe_reader (client_t *self)
     assert (self->pipe);
     if (self->pipe->reader == NULL) {
         self->pipe->reader = self;
+        set_next_event (self, ok_event);
         //  If writer was waiting, wake it up with a have_reader event
         if (self->pipe->writer)
             send_event (self->pipe->writer, have_reader_event);
     }
     else
         //  Two readers on same pipe isn't allowed
-        raise_exception (self, exception_event);
+        set_next_event (self, error_event);
 }
 
 
@@ -214,11 +228,11 @@ close_pipe_reader (client_t *self)
 
 
 //  --------------------------------------------------------------------------
-//  expect_pipe_reader
+//  look_for_pipe_reader
 //
 
 static void
-expect_pipe_reader (client_t *self)
+look_for_pipe_reader (client_t *self)
 {
     assert (self->pipe);
     if (self->pipe->reader)
@@ -249,11 +263,11 @@ pass_data_to_reader (client_t *self)
 
 
 //  --------------------------------------------------------------------------
-//  expect_pipe_data
+//  look_for_pipe_data
 //
 
 static void
-expect_pipe_data (client_t *self)
+look_for_pipe_data (client_t *self)
 {
     if (zpipes_msg_size (self->request) == 0)
         raise_exception (self, read_nothing_event);
@@ -281,6 +295,12 @@ collect_data_to_send (client_t *self)
 {
     //  Do we have enough data to satisfy the read request?
     size_t required = zpipes_msg_size (self->request);
+    
+    //  If pipe was closed, we'll do a short read with as much
+    //  data as we have pending
+    if (required > self->pending && self->pipe == NULL)
+        required = self->pending;
+        
     if (self->pending >= required) {
         //  Create a bucket chunk with the required max size
         zchunk_t *bucket = zchunk_new (NULL, required);
@@ -315,8 +335,16 @@ static int
 s_expect_reply (void *dealer, int message_id)
 {
     zpipes_msg_t *reply = zpipes_msg_recv (dealer);
-    assert (reply);
+    if (!reply) {
+        puts ("- interrupted");
+        return -1;
+    }
     int rc = zpipes_msg_id (reply) == message_id? 0: -1;
+    if (rc)
+        printf ("W: expected %d, got %d/%s\n",
+                message_id,
+                zpipes_msg_id (reply),
+                zpipes_msg_command (reply));
     zpipes_msg_destroy (&reply);
     return rc;
 }
@@ -329,14 +357,7 @@ zpipes_server_test (bool verbose)
     //  @selftest
     zctx_t *ctx = zctx_new ();
 
-    //  Test cases to do:
-    //  - close writer, with active reader, try to reopen, should work
-    //  - multiple readers, on pipes with same names (after writer closes)
-    //  - repeated read on closed pipe will return end-of-pipe
-    //  - two writers on same pipe isn't allowed
-    //  - if writer was waiting, wake it up with a have_reader event
-    //  - two readers on same pipe isn't allowed
-
+    //  Prepare test cases
     zpipes_server_t *self = zpipes_server_new ();
     assert (self);
     zpipes_server_bind (self, "ipc://@/zpipes/local");
@@ -345,23 +366,32 @@ zpipes_server_test (bool verbose)
     assert (writer);
     zsocket_connect (writer, "ipc://@/zpipes/local");
 
+    void *writer2 = zsocket_new (ctx, ZMQ_DEALER);
+    assert (writer2);
+    zsocket_connect (writer2, "ipc://@/zpipes/local");
+
     void *reader = zsocket_new (ctx, ZMQ_DEALER);
     assert (reader);
     zsocket_connect (reader, "ipc://@/zpipes/local");
     
+    void *reader2 = zsocket_new (ctx, ZMQ_DEALER);
+    assert (reader2);
+    zsocket_connect (reader2, "ipc://@/zpipes/local");
+    
+    zchunk_t *chunk = zchunk_new ("Hello, World", 12);
+    int32_t timeout = 100;
+    
     //  --------------------------------------------------------------------
-    //  Simple hello world test
+    //  Basic tests
 
-    //  Now open reader on pipe
+    //  Open writer on pipe
     zpipes_msg_send_output (writer, "test pipe");
     if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
         assert (false);
-    
+
     //  Write will timeout if there's no reader
-    zchunk_t *chunk = zchunk_new ("Hello, World", 12);
-    int32_t timeout = 100;
     zpipes_msg_send_write (writer, chunk, timeout);
-    if (s_expect_reply (writer, ZPIPES_MSG_TIMEOUT))
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_TIMEOUT))
         assert (false);
 
     //  Now open reader on pipe
@@ -371,12 +401,11 @@ zpipes_server_test (bool verbose)
 
     //  Read will timeout if there's no data
     zpipes_msg_send_read (reader, 12, timeout);
-    if (s_expect_reply (reader, ZPIPES_MSG_TIMEOUT))
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_TIMEOUT))
         assert (false);
 
     //  Write should now be successful
     zpipes_msg_send_write (writer, chunk, 0);
-    zchunk_destroy (&chunk);
     if (s_expect_reply (writer, ZPIPES_MSG_WRITE_OK))
         assert (false);
 
@@ -387,57 +416,317 @@ zpipes_server_test (bool verbose)
 
     //  Zero read request returns "end of pipe"
     zpipes_msg_send_read (reader, 0, 0);
-    if (s_expect_reply (reader, ZPIPES_MSG_END_OF_PIPE))
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_END))
         assert (false);
 
+    //  Close writer
     zpipes_msg_send_close (writer);
     if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
         assert (false);
 
-    //  Non-zero read request returns "end of pipe"
+    //  Any read request returns "end of pipe"
     zpipes_msg_send_read (reader, 12, timeout);
-    if (s_expect_reply (reader, ZPIPES_MSG_END_OF_PIPE))
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_END))
         assert (false);
 
+    //  Close reader
+    zpipes_msg_send_close (reader);
+    if (s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  --------------------------------------------------------------------
+    //  Test pipelining (request queuing & filtering)
+
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Open writer on pipe
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
+
+    //  Pipeline four read requests
+    zpipes_msg_send_read (reader, 12, timeout);
+    zpipes_msg_send_read (reader, 12, timeout);
+    zpipes_msg_send_read (reader, 12, timeout);
+    zpipes_msg_send_read (reader, 12, timeout);
+
+    //  First read will return with a timeout
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_TIMEOUT))
+        assert (false);
+
+    //  Write chunk to pipe
+    zpipes_msg_send_write (writer, chunk, 0);
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_OK))
+        assert (false);
+
+    //  Second read will succeed
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+
+    //  Send PING, expect PING-OK back
+    zpipes_msg_send_ping (reader);
+    if (s_expect_reply (reader, ZPIPES_MSG_PING_OK))
+        assert (false);
+
+    //  Close writer
+    zpipes_msg_send_close (writer);
+    if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Close reader
+    zpipes_msg_send_close (reader);
+
+    //  Third read will fail with end-of-pipe
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_FAILED))
+        assert (false);
+
+    if (s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Fourth read will fail with invalid
+    if (s_expect_reply (reader, ZPIPES_MSG_INVALID))
+        assert (false);
+
+    //  Closing an already closed pipe is an error
+    zpipes_msg_send_close (reader);
+    if (s_expect_reply (reader, ZPIPES_MSG_INVALID))
+        assert (false);
+
+    //  --------------------------------------------------------------------
+    //  Test reads and writes of different sizes
+
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Open writer on pipe
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
+
+    //  Write chunk to pipe
+    zpipes_msg_send_write (writer, chunk, 0);
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_OK))
+        assert (false);
+
+    //  Close writer
+    zpipes_msg_send_close (writer);
+    if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Read back in several steps
+    zpipes_msg_send_read (reader, 1, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+    zpipes_msg_send_read (reader, 2, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+    zpipes_msg_send_read (reader, 3, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+    zpipes_msg_send_read (reader, 3, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+    
+    //  We get a short read (3 bytes)
+    zpipes_msg_send_read (reader, 100, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+    
+    //  Pipe is now empty
+    zpipes_msg_send_read (reader, 100, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_END))
+        assert (false);
+    
+    //  Close reader
+    zpipes_msg_send_close (reader);
+    if (s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  --------------------------------------------------------------------
+    //  Test connection expiry
+
+    //  Set connection timeout to 200 msecs
+    zpipes_server_set (self, "server/timeout", "200");
+
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Read will expire, we don't expect any response for this command
+    zpipes_msg_send_read (reader, 12, 0);
+
+    //  Do nothing for long enough for the timeout to hit
+    zclock_sleep (300);
+
+    //  Try again, server should now treat the client as disconnected
+    zpipes_msg_send_read (reader, 12, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_INVALID))
+        assert (false);
+
+    //  Now check that disconnection erases pipe contents
+
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Open writer on pipe
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
+
+    //  Write chunk to pipe
+    zpipes_msg_send_write (writer, chunk, 0);
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_OK))
+        assert (false);
+
+    //  Do nothing for long enough for the timeout to hit
+    //  Both writer and reader should be disconnected
+    zclock_sleep (300);
+
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Open writer on pipe
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
+
+    //  This read should timeout, as pipe is empty
+    zpipes_msg_send_read (reader, 12, timeout);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_TIMEOUT))
+        assert (false);
+
+    //  Close writer
+    zpipes_msg_send_close (writer);
+    if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Close reader
     zpipes_msg_send_close (reader);
     if (s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK))
         assert (false);
     
     //  --------------------------------------------------------------------
-    //  Test re-chunking
+    //  Test writer closing while reader still active
 
-//
-//     //  Pipeline three read requests
-//     zpipes_msg_send_read (reader, 5, 100);
-//     zpipes_msg_send_read (reader, 5, 100);
-//     zpipes_msg_send_read (reader, 5, 100);
-//
-//     //  First will return with a timeout
-//     if (s_expect_reply (reader);
-//     assert (reply == ZPIPES_MSG_TIMEOUT);
-//
-//     //  Store a chunk
-//     zchunk_t *chunk = zchunk_new ("World", 5);
-//     assert (chunk);
-//     zpipes_msg_send_write (writer, chunk, 0);
-//     zchunk_destroy (&chunk);
-//     if (s_expect_reply (writer);
-//     assert (reply == ZPIPES_MSG_WRITE_OK);
-//
-//     //  Second will return with a chunk
-//     if (s_expect_reply (reader);
-//     assert (reply == ZPIPES_MSG_READ_OK);
-//
-//     //  Close writer
-//     zpipes_msg_send_close (writer);
-//     if (s_expect_reply (writer);
-//     assert (reply == ZPIPES_MSG_CLOSE_OK);
-//
-//     //  Third will return empty
-//     if (s_expect_reply (reader);
-//     assert (reply == ZPIPES_MSG_END_OF_PIPE);
+    //  Open writer on pipe
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
 
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
 
+    //  Write one chunk to pipe
+    zpipes_msg_send_write (writer, chunk, 0);
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_OK))
+        assert (false);
+
+    //  Close writer, before reader has read data
+    zpipes_msg_send_close (writer);
+    if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Open writer on same pipe name
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
+
+    //  Read should still be successful
+    zpipes_msg_send_read (reader, 12, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+
+    //  Create second reader and open pipe for input
+    zpipes_msg_send_input (reader2, "test pipe");
+    if (s_expect_reply (reader2, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Write one chunk to pipe, will go to second instance
+    zpipes_msg_send_write (writer, chunk, 0);
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_OK))
+        assert (false);
+
+    //  Pipe is terminated and empty
+    zpipes_msg_send_read (reader, 0, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_END))
+        assert (false);
+
+    //  Reader2 should be successful
+    zpipes_msg_send_read (reader2, 12, 0);
+    if (s_expect_reply (reader2, ZPIPES_MSG_READ_OK))
+        assert (false);
+
+    //  Close reader 
+    zpipes_msg_send_close (reader);
+    if (s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Close writer
+    zpipes_msg_send_close (writer);
+    if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+    
+    //  Pipe is terminated and empty
+    zpipes_msg_send_read (reader2, 0, 0);
+    if (s_expect_reply (reader2, ZPIPES_MSG_READ_END))
+        assert (false);
+
+    //  Do that again to be sure it wasn't a coincidence :)
+    zpipes_msg_send_read (reader2, 0, 0);
+    if (s_expect_reply (reader2, ZPIPES_MSG_READ_END))
+        assert (false);
+
+    //  Close reader2
+    zpipes_msg_send_close (reader2);
+    if (s_expect_reply (reader2, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  --------------------------------------------------------------------
+    //  Two readers or writers on same pipe are not allowed
+
+    //  Open writer on pipe
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
+
+    //  Open second writer on pipe
+    zpipes_msg_send_output (writer2, "test pipe");
+    if (s_expect_reply (writer2, ZPIPES_MSG_OUTPUT_FAILED))
+        assert (false);
+
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Open second reader on pipe
+    zpipes_msg_send_input (reader2, "test pipe");
+    if (s_expect_reply (reader2, ZPIPES_MSG_INPUT_FAILED))
+        assert (false);
+
+    //  Close reader
+    zpipes_msg_send_close (reader);
+    if (s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Close writer
+    zpipes_msg_send_close (writer);
+    if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+    
+    zchunk_destroy (&chunk);
     zpipes_server_destroy (&self);
     zctx_destroy (&ctx);
     //  @end

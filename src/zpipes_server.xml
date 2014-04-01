@@ -8,69 +8,105 @@
     <include filename = "license.xml" />
 
     <!-- State machine for a client connection -->
-    <state name = "start">
-        <event name = "output" next = "writing">
+    
+    Names of states, events, and actions are case insensitive.
+    By convention however we use uppercase for protocol events.
+
+    <state name = "start" inherit = "external">
+        <event name = "OUTPUT" next = "before writing">
             <action name = "lookup or create pipe" />
             <action name = "open pipe writer" />
-            <action name = "send" message = "output ok" />
         </event>
-        <event name = "input" next = "reading">
+        <event name = "INPUT" next = "before reading">
             <action name = "lookup or create pipe" />
             <action name = "open pipe reader" />
-            <action name = "send" message = "input ok" />
         </event>
     </state>
-
-    Writing to a pipe waits until there is a reader, or a timeout. In this
-    state we can also close the pipe.
-
-    <state name = "writing">
-        <event name = "write" next = "expecting reader">
-            <action name = "expect pipe reader" />
+        
+    <state name = "before writing">
+        <event name = "ok" next = "writing">
+            <action name = "send" message = "OUTPUT OK" />
         </event>
-        <event name = "close">
-            <action name = "close pipe writer" />
-            <action name = "send" message = "close ok" />
+        <event name = "error">
+            <action name = "send" message = "OUTPUT FAILED" />
             <action name = "terminate" />
         </event>
-        <event name = "have reader">
-            <!-- We get this if a reader arrives; ignore it -->
+    </state>
+
+    <state name = "writing" inherit = "external">
+        <event name = "WRITE" next = "processing write">
+            <action name = "look for pipe reader" />
+        </event>
+        <event name = "READ">
+            <action name = "send" message = "INVALID" />
+            <action name = "terminate" />
+        </event>
+        <event name = "CLOSE" next = "start">
+            <action name = "close pipe writer" />
+            <action name = "send" message = "CLOSE OK" />
+        </event>
+        <event name = "expired">
+            <action name = "close pipe writer" />
+            <action name = "terminate" />
         </event>
     </state>
 
-    In this internal state, we either get a have reader event immediately,
-    or a wakeup event after the specified write timeout.
+    In this internal state, we either have a reader immediately, or
+    we get a wakeup event after the specified write timeout.
 
-    <state name = "expecting reader">
+    <state name = "processing write" inherit = "internal">
         <!-- either immediately, or when a reader arrives -->
         <event name = "have reader" next = "writing">
             <action name = "pass data to reader" />
-            <action name = "send" message = "write ok" />
+            <action name = "send" message = "WRITE OK" />
         </event>
         <!-- alarm wakeup event if nothing else happens -->
         <event name = "wakeup" next = "writing">
-            <action name = "send" message = "timeout" />
+            <action name = "send" message = "WRITE TIMEOUT" />
+        </event>
+        <event name = "CLOSE" next = "start">
+            <action name = "send" message = "WRITE FAILED" />
+            <action name = "close pipe writer" />
+            <action name = "send" message = "CLOSE OK" />
+        </event>
+        <event name = "expired">
+            <action name = "close pipe writer" />
+            <action name = "terminate" />
         </event>
     </state>
 
+    <state name = "before reading">
+        <event name = "ok" next = "reading">
+            <action name = "send" message = "INPUT OK" />
+        </event>
+        <event name = "error">
+            <action name = "send" message = "INPUT FAILED" />
+            <action name = "terminate" />
+        </event>
+    </state>
+    
     Reading from a pipe waits until there is sufficient data, or a timeout.
     In this state we can also close the pipe.
 
-    <state name = "reading">
-        <event name = "read" next = "expecting data">
-            <action name = "expect pipe data" />
+    <state name = "reading" inherit = "external">
+        <event name = "READ" next = "processing read">
+            <action name = "look for pipe data" />
         </event>
         <!-- exception event if the reader asked for zero bytes -->
         <event name = "read nothing">
-            <action name = "send" message = "end of pipe" />
+            <action name = "send" message = "READ END" />
         </event>
-        <event name = "close">
-            <action name = "close pipe reader" />
-            <action name = "send" message = "close ok" />
+        <event name = "WRITE">
+            <action name = "send" message = "INVALID" />
             <action name = "terminate" />
         </event>
-        <event name = "have data">
-            <!-- We get this if a write happens; ignore it -->
+        <event name = "CLOSE" next = "start">
+            <action name = "close pipe reader" />
+            <action name = "send" message = "CLOSE OK" />
+        </event>
+        <event name = "expired">
+            <action name = "close pipe reader" />
+            <action name = "terminate" />
         </event>
     </state>
 
@@ -78,48 +114,61 @@
     woken up after the specified read timeout, or the writer closed our
     pipe.
 
-    <state name = "expecting data">
+    <state name = "processing read" inherit = "internal">
         <!-- either immediately, or when data arrives -->
         <event name = "have data" next = "reading">
             <action name = "collect data to send" />
-            <action name = "send" message = "read ok" />
+            <action name = "send" message = "READ OK" />
         </event>
         <!-- exception event if not enough data yet -->
         <event name = "not enough data" />
 
         <!-- exception event if the writer closed the pipe -->
         <event name = "pipe terminated" next = "reading">
-            <action name = "send" message = "end of pipe" />
+            <action name = "send" message = "READ END" />
         </event>
         <!-- alarm wakeup event if nothing else happens -->
         <event name = "wakeup" next = "reading">
-            <action name = "send" message = "timeout" />
+            <action name = "send" message = "READ TIMEOUT" />
         </event>
-    </state>
-
-    The defaults state handles an 'exception_event' (sends 'failed' back to
-    the client). It also specifies that any unrecognized protocol command
-    (an '$other' event) will also cause the engine to send 'failed' back to
-    the client.
-
-    <state name = "defaults">
-        <event name = "exception">
-            <action name = "send" message = "failed" />
+        <event name = "CLOSE" next = "start">
+            <action name = "send" message = "READ FAILED" />
+            <action name = "close pipe reader" />
+            <action name = "send" message = "CLOSE OK" />
+        </event>
+        <event name = "expired">
+            <action name = "close pipe reader" />
             <action name = "terminate" />
         </event>
-        <event name = "$other">
-            <action name = "send" message = "failed" />
+    </state>
+
+    This superstate defines default handling for external states:
+
+    <state name = "external">
+        <!-- PING is always valid in external states -->
+        <event name = "PING">
+            <action name = "send" message = "PING OK" />
+        </event>
+        <!-- All other protocol messages are invalid -->
+        <event name = "*">
+            <action name = "send" message = "INVALID" />
+            <action name = "terminate" />
+        </event>
+        <!-- We get this if a reader arrives; ignore it -->
+        <event name = "have reader" />
+        <!-- We get this if a writer joins; ignore it -->
+        <event name = "have data" />
+        <!-- This built-in event hits on a connection timeout -->
+        <event name = "expired">
+            <action name = "terminate" />
         </event>
     </state>
 
-    We can define API methods to pass commands back from the application
-    through to the engine.
+    This superstate defines default handling for internal states:
 
-    <!-- API methods
-    <method name = "somename" return = "number">
-        One-line description of method here
-        <argument name = "some value" type = "string">What is this argument?</argument>
-        <argument name = "some value" type = "number">What is this argument?</argument>
-    </method>
-    -->
+    <state name = "internal">
+        <event name = "PING">
+            <action name = "send" message = "PING OK" />
+        </event>
+    </state>
 </class>

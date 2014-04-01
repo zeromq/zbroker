@@ -29,7 +29,8 @@ struct _zpipes_client_t {
 };
 
 
-//  Returns 0 if the reply from the broker isn't what we expect
+//  Return 0 if the reply from the broker is what we expect, else return
+//  -1. This includes interrupts.
 //  TODO: implement timeout when broker doesn't reply at all
 //  TODO: this loop should also PING the broker every second
 
@@ -37,7 +38,8 @@ static int
 s_expect_reply (zpipes_client_t *self, int message_id)
 {
     zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
-    assert (reply);
+    if (!reply)
+        return -1;
     int rc = zpipes_msg_id (reply) == message_id? 0: -1;
     zpipes_msg_destroy (&reply);
     return rc;
@@ -88,8 +90,10 @@ zpipes_client_destroy (zpipes_client_t **self_p)
         zpipes_client_t *self = *self_p;
         if (self->dealer) {
             zpipes_msg_send_close (self->dealer);
-            if (s_expect_reply (self, ZPIPES_MSG_CLOSE_OK))
-                assert (false);     //  Cannot happen in current use case
+            //  Get reply, ignore it: could be ok or an error depending
+            //  on what the client did before.
+            zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
+            zpipes_msg_destroy (&reply);
         }
         zctx_destroy (&self->ctx);
         free (self);
@@ -147,10 +151,10 @@ zpipes_client_read (zpipes_client_t *self, void *data, size_t size, int timeout)
         memcpy (data, zchunk_data (chunk), bytes);
     }
     else
-    if (zpipes_msg_id (reply) == ZPIPES_MSG_END_OF_PIPE)
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_READ_END)
         bytes = 0;
     else
-    if (zpipes_msg_id (reply) == ZPIPES_MSG_TIMEOUT) {
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_READ_TIMEOUT) {
         self->error = EAGAIN;
         bytes = -1;
     }
@@ -205,14 +209,18 @@ zpipes_client_test (bool verbose)
 
     bytes = zpipes_client_read (reader, buffer, 1, 100);
     assert (bytes == 1);
-    bytes = zpipes_client_read (reader, buffer, 17, 100);
-    assert (bytes == 17);
+    bytes = zpipes_client_read (reader, buffer, 10, 100);
+    assert (bytes == 10);
 
     //  Now close writer
     zpipes_client_destroy (&writer);
 
+    //  Expect end of pipe (short read)
+    bytes = zpipes_client_read (reader, buffer, 50, 100);
+    assert (bytes == 7);
+    
     //  Expect end of pipe (empty chunk)
-    bytes = zpipes_client_read (reader, buffer, 6, 200);
+    bytes = zpipes_client_read (reader, buffer, 50, 100);
     assert (bytes == 0);
 
     //  Expect illegal action (EBADF) writing on reader

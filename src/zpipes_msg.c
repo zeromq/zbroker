@@ -981,7 +981,6 @@ zpipes_msg_dup (zpipes_msg_t *self)
     zpipes_msg_t *copy = zpipes_msg_new (self->id);
     if (self->routing_id)
         copy->routing_id = zframe_dup (self->routing_id);
-
     switch (self->id) {
         case ZPIPES_MSG_INPUT:
             copy->pipename = self->pipename? strdup (self->pipename): NULL;
@@ -1362,7 +1361,7 @@ zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...)
 //  --------------------------------------------------------------------------
 //  Get/set the size field
 
-uint32_t 
+uint32_t
 zpipes_msg_size (zpipes_msg_t *self)
 {
     assert (self);
@@ -1380,7 +1379,7 @@ zpipes_msg_set_size (zpipes_msg_t *self, uint32_t size)
 //  --------------------------------------------------------------------------
 //  Get/set the timeout field
 
-uint32_t 
+uint32_t
 zpipes_msg_timeout (zpipes_msg_t *self)
 {
     assert (self);

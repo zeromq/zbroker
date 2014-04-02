@@ -213,6 +213,7 @@ typedef struct {
     int port;                   //  Server port bound to
     zhash_t *clients;           //  Clients we're connected to
     zconfig_t *config;          //  Configuration tree
+    zlog_t *log;                //  Server logger
     uint client_count;          //  Client identifier counter
     size_t timeout;             //  Default client expiry timeout
     size_t monitor;             //  Server monitor interval in msec
@@ -623,7 +624,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zclock_log ("%6d: W: unhandled event %s in %s",
+                    zlog_warning (self->server->log,
+                        "%6d: unhandled event %s in %s",
                         self->unique_id,
                         s_event_name [self->event],
                         s_state_name [self->state]);
@@ -814,7 +816,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zclock_log ("%6d: W: unhandled event %s in %s",
+                    zlog_warning (self->server->log,
+                        "%6d: unhandled event %s in %s",
                         self->unique_id,
                         s_event_name [self->event],
                         s_state_name [self->state]);
@@ -853,7 +856,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zclock_log ("%6d: W: unhandled event %s in %s",
+                    zlog_warning (self->server->log,
+                        "%6d: unhandled event %s in %s",
                         self->unique_id,
                         s_event_name [self->event],
                         s_state_name [self->state]);
@@ -1071,7 +1075,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zclock_log ("%6d: W: unhandled event %s in %s",
+                    zlog_warning (self->server->log,
+                        "%6d: unhandled event %s in %s",
                         self->unique_id,
                         s_event_name [self->event],
                         s_state_name [self->state]);
@@ -1135,7 +1140,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zclock_log ("%6d: W: unhandled event %s in %s",
+                    zlog_warning (self->server->log,
+                        "%6d: unhandled event %s in %s",
                         self->unique_id,
                         s_event_name [self->event],
                         s_state_name [self->state]);
@@ -1182,6 +1188,12 @@ s_server_config_self (s_server_t *self)
     self->monitor = atoi (
         zconfig_resolve (self->config, "server/monitor", "5"));
     self->monitor_at = zclock_time () + self->monitor;
+
+    //  Do we want to run server in the background?
+    int background = atoi (
+        zconfig_resolve (self->config, "server/background", "0"));
+    if (!background)
+        zlog_set_foreground (self->log, true);
 }
 
 static s_server_t *
@@ -1196,6 +1208,7 @@ s_server_new (zctx_t *ctx, void *pipe)
     self->pipe = pipe;
     self->router = zsocket_new (self->ctx, ZMQ_ROUTER);
     self->clients = zhash_new ();
+    self->log = zlog_new ("zpipes_server");
     self->config = zconfig_new ("root", NULL);
     s_server_config_self (self);
 
@@ -1227,12 +1240,15 @@ static void
 s_server_apply_config (s_server_t *self)
 {
     //  Apply echo commands and class methods
-    zconfig_t *section = zconfig_child (self->config);
+    zconfig_t *section = zconfig_locate (self->config, "zpipes_server");
+    if (section)
+        section = zconfig_child (section);
+
     while (section) {
         zconfig_t *entry = zconfig_child (section);
         while (entry) {
             if (streq (zconfig_name (entry), "echo"))
-                zclock_log ("%s", zconfig_value (entry));
+                zlog_notice (self->log, "%s", zconfig_value (entry));
             entry = zconfig_next (entry);
         }
         if (streq (zconfig_name (section), "bind")) {
@@ -1264,7 +1280,8 @@ s_server_control_message (s_server_t *self)
         if (self->config)
             s_server_apply_config (self);
         else {
-            printf ("E: cannot load config file '%s'\n", config_file);
+            zlog_warning (self->log,
+                "cannot load config file '%s'\n", config_file);
             self->config = zconfig_new ("root", NULL);
         }
         free (config_file);
@@ -1323,6 +1340,7 @@ s_server_task (void *args, zctx_t *ctx, void *pipe)
 {
     s_server_t *self = s_server_new (ctx, pipe);
     assert (self);
+    zlog_notice (self->log, "Starting zpipes_server service");
     zstr_send (self->pipe, "OK");
 
     zmq_pollitem_t items [] = {
@@ -1356,5 +1374,6 @@ s_server_task (void *args, zctx_t *ctx, void *pipe)
             self->monitor_at = zclock_time () + self->monitor;
         }
     }
+    zlog_notice (self->log, "Terminating zpipes_server service");
     s_server_destroy (&self);
 }

@@ -155,7 +155,7 @@ int
 //  Send the INPUT to the output in one step
 int
     zpipes_msg_send_input (void *output,
-        const char *pipename);
+    const char *pipename);
     
 //  Send the INPUT_OK to the output in one step
 int
@@ -164,12 +164,12 @@ int
 //  Send the INPUT_FAILED to the output in one step
 int
     zpipes_msg_send_input_failed (void *output,
-        const char *reason);
+    const char *reason);
     
 //  Send the OUTPUT to the output in one step
 int
     zpipes_msg_send_output (void *output,
-        const char *pipename);
+    const char *pipename);
     
 //  Send the OUTPUT_OK to the output in one step
 int
@@ -178,18 +178,18 @@ int
 //  Send the OUTPUT_FAILED to the output in one step
 int
     zpipes_msg_send_output_failed (void *output,
-        const char *reason);
+    const char *reason);
     
 //  Send the READ to the output in one step
 int
     zpipes_msg_send_read (void *output,
-        uint32_t size,
-        uint32_t timeout);
+    uint32_t size,
+    uint32_t timeout);
     
 //  Send the READ_OK to the output in one step
 int
     zpipes_msg_send_read_ok (void *output,
-        zchunk_t *chunk);
+    zchunk_t *chunk);
     
 //  Send the READ_END to the output in one step
 int
@@ -202,13 +202,13 @@ int
 //  Send the READ_FAILED to the output in one step
 int
     zpipes_msg_send_read_failed (void *output,
-        const char *reason);
+    const char *reason);
     
 //  Send the WRITE to the output in one step
 int
     zpipes_msg_send_write (void *output,
-        zchunk_t *chunk,
-        uint32_t timeout);
+    zchunk_t *chunk,
+    uint32_t timeout);
     
 //  Send the WRITE_OK to the output in one step
 int
@@ -221,7 +221,7 @@ int
 //  Send the WRITE_FAILED to the output in one step
 int
     zpipes_msg_send_write_failed (void *output,
-        const char *reason);
+    const char *reason);
     
 //  Send the CLOSE to the output in one step
 int
@@ -234,7 +234,7 @@ int
 //  Send the CLOSE_FAILED to the output in one step
 int
     zpipes_msg_send_close_failed (void *output,
-        const char *reason);
+    const char *reason);
     
 //  Send the PING to the output in one step
 int

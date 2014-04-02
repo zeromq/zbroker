@@ -25,35 +25,36 @@ int main (int argc, char *argv [])
     puts (COPYRIGHT);
     puts (NOWARRANTY);
 
-    if (argc == 1) {
-        puts ("Usage: zbroker [-b] [configfile]");
-        puts ("  -b  run broker as background process");
-        puts ("  Default configfile is 'zbroker.cfg'");
+    if (argc == 2 && streq (argv [1], "-h")) {
+        puts ("Usage: zbroker [-h | config-file]");
+        puts ("  Default config-file is 'zbroker.cfg'");
         return 0;
-    }
-    //  This is poor argument passing; should be improved later
-    int argn = 1;
-
-    //  Collect -b switch, if any
-    bool as_daemon = false;
-    if (argc > argn && streq (argv [argn], "-b")) {
-        as_daemon = true;
-        argn++;
     }
     //  Collect configuration file name
     const char *config_file = "zbroker.cfg";
-    if (argc > argn) {
-        config_file = argv [argn];
-        argn++;
-    }
+    if (argc > 1)
+        config_file = argv [1];
+    
+    //  Load config file for our own use here
     zclock_log ("I: starting zpipes server using config in '%s'", config_file);
+    zconfig_t *config = zconfig_load (config_file);
+    if (config) {
+        //  Do we want to run server in the background?
+        int as_daemon = atoi (zconfig_resolve (config, "server/background", "0"));
+        const char *workdir = zconfig_resolve (config, "server/workdir", ".");
+        if (as_daemon) {
+            zclock_log ("I: broker switching to background process...");
+            zsys_daemonize (workdir);
+        }
+        zconfig_destroy (&config);
+    }
+    else {
+        zclock_log ("E: cannot load config file '%s'\\n", config_file);
+        return 1;
+    }
     zpipes_server_t *zpipes_server = zpipes_server_new ();
     zpipes_server_configure (zpipes_server, config_file);
-
-    if (as_daemon) {
-        zclock_log ("I: broker switching to background process...");
-        zsys_daemonize (NULL);
-    }
+    
     //  Wait until process is interrupted
     while (!zctx_interrupted)
         zclock_sleep (1000);
@@ -63,5 +64,3 @@ int main (int argc, char *argv [])
     zpipes_server_destroy (&zpipes_server);
     return 0;
 }
-
-

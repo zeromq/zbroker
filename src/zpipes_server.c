@@ -19,8 +19,14 @@
 */
 
 #include <czmq.h>
+#include <zyre.h>
 #include "../include/zpipes_msg.h"
 #include "../include/zpipes_server.h"
+
+//  This method handles all traffic from other broker nodes
+
+static int
+zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument);
 
 //  ---------------------------------------------------------------------
 //  Forward declarations for the two main classes we use here
@@ -32,28 +38,15 @@ typedef struct _client_t client_t;
 //  whatever properties and structures you need for the server.
 
 struct _server_t {
+    //  These properties must always be present in the server_t
+    //  and are set by the generated engine; do not modify them!
+    zctx_t *ctx;                //  Parent ZeroMQ context
+    
+    //  These properties are specific for this application
     char *name;                 //  Server public name
     zhash_t *pipes;             //  Collection of pipes
+    zyre_t *zyre;               //  Zyre node
 };
-
-//  Allocate properties and structures for a new server instance.
-//  Return 0 if OK, or -1 if there was an error.
-
-static int
-server_initialize (server_t *self)
-{
-    self->pipes = zhash_new ();
-    return 0;
-}
-
-//  Free properties and structures for a server instance
-
-static void
-server_terminate (server_t *self)
-{
-    zhash_destroy (&self->pipes);
-}
-
 
 //  --------------------------------------------------------------------------
 //  Structure defining a single named pipe
@@ -64,6 +57,51 @@ typedef struct {
     client_t *writer;           //  Pipe writer, if any
     client_t *reader;           //  Pipe reader, if any
 } pipe_t;
+
+//  ---------------------------------------------------------------------
+//  This structure defines the state for each client connection. It will
+//  be passed to each action in the 'self' argument.
+
+struct _client_t {
+    //  These properties must always be present in the client_t
+    //  and are set by the generated engine; do not modify them!
+    server_t *server;           //  Reference to parent server
+    zpipes_msg_t *request;      //  Last received request
+    zpipes_msg_t *reply;        //  Reply to send out, if any
+
+    //  These properties are specific for this application
+    pipe_t *pipe;               //  Current pipe, if any
+    size_t pending;             //  Current total size of queue
+    zlist_t *queue;             //  Queue of chunks to be delivered
+};
+
+//  Include the generated server engine
+
+#include "zpipes_server_engine.h"
+
+
+//  Allocate properties and structures for a new server instance.
+//  Return 0 if OK, or -1 if there was an error.
+
+static int
+server_initialize (server_t *self)
+{
+    self->pipes = zhash_new ();
+    self->zyre = zyre_new (self->ctx);
+    zyre_start (self->zyre);
+    zyre_join (self->zyre, "ZPIPES");
+    engine_handle_socket (self, zyre_socket (self->zyre), zyre_handler);
+    return 0;
+}
+
+//  Free properties and structures for a server instance
+
+static void
+server_terminate (server_t *self)
+{
+    zyre_destroy (&self->zyre);
+    zhash_destroy (&self->pipes);
+}
 
 static void s_delete_pipe (void *argument);
 
@@ -98,26 +136,8 @@ s_delete_pipe (void *argument)
     pipe_destroy (&pipe);
 }
 
-
-//  ---------------------------------------------------------------------
-//  This structure defines the state for each client connection. It will
-//  be passed to each action in the 'self' argument.
-
-struct _client_t {
-    //  These properties must always be present in the client_t
-    server_t *server;           //  Reference to parent server
-    zpipes_msg_t *request;      //  Last received request
-    zpipes_msg_t *reply;        //  Reply to send out, if any
-
-    //  These properties are specific for this application
-    pipe_t *pipe;               //  Current pipe, if any
-    size_t pending;             //  Current total size of queue
-    zlist_t *queue;             //  Queue of chunks to be delivered
-};
-
-
 //  Allocate properties and structures for a new client connection and
-//  optionally set_next_event (). Return 0 if OK, or -1 on error.
+//  optionally engine_set_next_event (). Return 0 if OK, or -1 on error.
 
 static int
 client_initialize (client_t *self)
@@ -138,9 +158,6 @@ client_terminate (client_t *self)
     }
     zlist_destroy (&self->queue);
 }
-
-//  Include the generated server engine
-#include "zpipes_server_engine.h"
 
 
 //  --------------------------------------------------------------------------
@@ -167,11 +184,11 @@ open_pipe_writer (client_t *self)
     assert (self->pipe);
     if (self->pipe->writer == NULL) {
         self->pipe->writer = self;
-        set_next_event (self, ok_event);
+        engine_set_next_event (self, ok_event);
     }
     else
         //  Two writers on same pipe isn't allowed
-        set_next_event (self, error_event);
+        engine_set_next_event (self, error_event);
 }
 
 
@@ -185,14 +202,14 @@ open_pipe_reader (client_t *self)
     assert (self->pipe);
     if (self->pipe->reader == NULL) {
         self->pipe->reader = self;
-        set_next_event (self, ok_event);
+        engine_set_next_event (self, ok_event);
         //  If writer was waiting, wake it up with a have_reader event
         if (self->pipe->writer)
-            send_event (self->pipe->writer, have_reader_event);
+            engine_send_event (self->pipe->writer, have_reader_event);
     }
     else
         //  Two readers on same pipe isn't allowed
-        set_next_event (self, error_event);
+        engine_set_next_event (self, error_event);
 }
 
 
@@ -236,10 +253,11 @@ look_for_pipe_reader (client_t *self)
 {
     assert (self->pipe);
     if (self->pipe->reader)
-        set_next_event (self, have_reader_event);
+        engine_set_next_event (self, have_reader_event);
     else
     if (zpipes_msg_timeout (self->request))
-        set_wakeup_event (self, zpipes_msg_timeout (self->request), wakeup_event);
+        engine_set_wakeup_event (self,
+            zpipes_msg_timeout (self->request), wakeup_event);
     //
     //  or else wait until a reader arrives
 }
@@ -258,7 +276,7 @@ pass_data_to_reader (client_t *self)
     zchunk_t *chunk = zpipes_msg_get_chunk (self->request);
     zlist_append (self->pipe->reader->queue, chunk);
     self->pipe->reader->pending += zchunk_size (chunk);
-    send_event (self->pipe->reader, have_data_event);
+    engine_send_event (self->pipe->reader, have_data_event);
 }
 
 
@@ -270,17 +288,18 @@ static void
 look_for_pipe_data (client_t *self)
 {
     if (zpipes_msg_size (self->request) == 0)
-        raise_exception (self, read_nothing_event);
+        engine_set_exception (self, read_nothing_event);
     else
     if (zlist_size (self->queue))
-        set_next_event (self, have_data_event);
+        engine_set_next_event (self, have_data_event);
     else
     if (!self->pipe)
         //  Repeated read on closed pipe will return end-of-pipe
-        set_next_event (self, pipe_terminated_event);
+        engine_set_next_event (self, pipe_terminated_event);
     else
     if (zpipes_msg_timeout (self->request))
-        set_wakeup_event (self, zpipes_msg_timeout (self->request), wakeup_event);
+        engine_set_wakeup_event (self,
+                zpipes_msg_timeout (self->request), wakeup_event);
     //
     //  or else wait until a writer has data for us
 }
@@ -324,7 +343,21 @@ collect_data_to_send (client_t *self)
         self->pending -= required;
     }
     else
-        raise_exception (self, not_enough_data_event);
+        engine_set_exception (self, not_enough_data_event);
+}
+
+
+//  Handle Zyre traffic
+
+static int
+zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument)
+{
+    server_t *self = (server_t *) argument;
+    zmsg_t *msg = zyre_recv (self->zyre);
+    if (!msg)
+        return 0;               //  Interrupted; do nothing
+    zmsg_dump (msg);          
+    return 0;                 
 }
 
 

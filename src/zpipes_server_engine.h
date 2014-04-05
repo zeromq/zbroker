@@ -71,9 +71,11 @@ zpipes_server_destroy (zpipes_server_t **self_p)
     assert (self_p);
     if (*self_p) {
         zpipes_server_t *self = *self_p;
-        zstr_send (self->pipe, "TERMINATE");
-        char *string = zstr_recv (self->pipe);
-        free (string);
+        if (!zctx_interrupted) {
+            zstr_send (self->pipe, "TERMINATE");
+            char *string = zstr_recv (self->pipe);
+            free (string);
+        }
         zctx_destroy (&self->ctx);
         free (self);
         *self_p = NULL;
@@ -83,6 +85,7 @@ zpipes_server_destroy (zpipes_server_t **self_p)
 
 //  --------------------------------------------------------------------------
 //  Load server configuration data
+
 void
 zpipes_server_configure (zpipes_server_t *self, const char *config_file)
 {
@@ -201,9 +204,9 @@ s_event_name [] = {
  
 
 //  ---------------------------------------------------------------------
-//  Context for the server task. This embeds the application-level
-//  server context at its start, so that a pointer to server_t can
-//  be cast to s_server_t for our internal use.
+//  Context for the whole server task. This embeds the application-level
+//  server context at its start (the entire structure, not a reference),
+//  so we can cast a pointer between server_t and s_server_t arbitrarily.
 
 typedef struct {
     server_t server;            //  Application-level server context
@@ -211,21 +214,20 @@ typedef struct {
     void *pipe;                 //  Socket to back to caller API
     void *router;               //  Socket to talk to clients
     int port;                   //  Server port bound to
+    zloop_t *loop;              //  Reactor for server sockets
     zhash_t *clients;           //  Clients we're connected to
     zconfig_t *config;          //  Configuration tree
     zlog_t *log;                //  Server logger
     uint client_count;          //  Client identifier counter
     size_t timeout;             //  Default client expiry timeout
-    size_t monitor;             //  Server monitor interval in msec
-    int64_t monitor_at;         //  Next monitor at this time
     bool terminated;            //  Server is shutting down
 } s_server_t;
 
 
 //  ---------------------------------------------------------------------
 //  Context for each connected client. This embeds the application-level
-//  client context at its start, so that a pointer to client_t can
-//  be cast to s_client_t for our internal use.
+//  client context at its start (the entire structure, not a reference),
+//  so we can cast a pointer between client_t and s_client_t arbitrarily.
 
 typedef struct {
     client_t client;            //  Application-level client context
@@ -238,14 +240,23 @@ typedef struct {
     event_t event;              //  Current event
     event_t next_event;         //  The next event
     event_t exception;          //  Exception event, if any
-    int64_t wakeup_at;          //  Wake up at this time
+    int expiry_timer;           //  zloop timer for client timeouts
+    int wakeup_timer;           //  zloop timer for client alarms
     event_t wakeup_event;       //  Wake up with this event
-    int64_t expires_at;         //  Expires at this time
-    size_t timeout;             //  Actual connection timeout
 } s_client_t;
 
+static int
+    server_initialize (server_t *self);
+static void
+    server_terminate (server_t *self);
+static int
+    client_initialize (client_t *self);
+static void
+    client_terminate (client_t *self);
 static void
     s_client_execute (s_client_t *client, int event);
+static int
+    s_client_wakeup (zloop_t *loop, int timer_id, void *argument);
 static void
     lookup_or_create_pipe (client_t *self);
 static void
@@ -273,20 +284,24 @@ static void
 //  router socket and treat that as the event.
 
 static void
-set_next_event (client_t *self, event_t event)
+engine_set_next_event (client_t *client, event_t event)
 {
-    if (self)
-        ((s_client_t *) self)->next_event = event;
+    if (client) {
+        s_client_t *self = (s_client_t *) client;
+        self->next_event = event;
+    }
 }
 
 //  Raise an exception with 'event', halting any actions in progress.
 //  Continues execution of actions defined for the exception event.
 
 static void
-raise_exception (client_t *self, event_t event)
+engine_set_exception (client_t *client, event_t event)
 {
-    if (self)
-        ((s_client_t *) self)->exception = (event);
+    if (client) {
+        s_client_t *self = (s_client_t *) client;
+        self->exception = event;
+    }
 }
 
 //  Set wakeup alarm after 'delay' msecs. The next state should
@@ -294,11 +309,17 @@ raise_exception (client_t *self, event_t event)
 //  event.
 
 static void
-set_wakeup_event (client_t *self, size_t delay, event_t event)
+engine_set_wakeup_event (client_t *client, size_t delay, event_t event)
 {
-    if (self) {
-        ((s_client_t *) self)->wakeup_at = zclock_time () + (delay);
-        ((s_client_t *) self)->wakeup_event = (event);
+    if (client) {
+        s_client_t *self = (s_client_t *) client;
+        if (self->wakeup_timer) {
+            zloop_timer_end (self->server->loop, self->wakeup_timer);
+            self->wakeup_timer = 0;
+        }
+        self->wakeup_timer = zloop_timer (
+            self->server->loop, delay, 1, s_client_wakeup, self);
+        self->wakeup_event = event;
     }
 }
 
@@ -306,26 +327,46 @@ set_wakeup_event (client_t *self, size_t delay, event_t event)
 //  other clients. Cancels any wakeup alarm on that client.
 
 static void
-send_event (client_t *self, event_t event)
+engine_send_event (client_t *client, event_t event)
 {
-    if (self)
-        s_client_execute ((s_client_t *) self, event);
+    if (client) {
+        s_client_t *self = (s_client_t *) client;
+        s_client_execute (self, event);
+    }
 }
 
+//  Poll socket for activity, invoke handler on any received message.
+//  Handler must be a CZMQ zloop_fn function; receives server as arg.
 
-//  Pedantic compilers don't like unused functions
+static void
+engine_handle_socket (server_t *server, void *socket, zloop_fn handler)
+{
+    if (server) {
+        s_server_t *self = (s_server_t *) server;
+        zmq_pollitem_t poll_item = { socket, 0, ZMQ_POLLIN };
+        int rc = zloop_poller (self->loop, &poll_item, handler, self);
+        assert (rc == 0);
+        zloop_set_tolerant (self->loop, &poll_item);
+    }
+}
+
+//  Pedantic compilers don't like unused functions, so we call the whole
+//  API, passing null references. It's nasty and horrid and sufficient.
+
 static void
 s_satisfy_pedantic_compilers (void)
 {
-    set_next_event (NULL, 0);
-    raise_exception (NULL, 0);
-    set_wakeup_event (NULL, 0, 0);
-    send_event (NULL, 0);
+    engine_set_next_event (NULL, 0);
+    engine_set_exception (NULL, 0);
+    engine_set_wakeup_event (NULL, 0, 0);
+    engine_send_event (NULL, 0);
+    engine_handle_socket (NULL, 0, NULL);
 }
 
 
 //  ---------------------------------------------------------------------
 //  Generic methods on protocol messages
+//  TODO: replace with lookup table, since ID is one byte
 
 static event_t
 s_protocol_event (zpipes_msg_t *request)
@@ -416,47 +457,6 @@ s_client_free (void *argument)
     s_client_destroy (&client);
 }
 
-//  Client hash function that calculates tickless timer
-static int
-s_client_tickless (const char *key, void *client, void *argument)
-{
-    s_client_t *self = (s_client_t *) client;
-    uint64_t *tickless = (uint64_t *) argument;
-    if (self->expires_at
-    &&  *tickless > self->expires_at)
-        *tickless = self->expires_at;
-    if (self->wakeup_at
-    &&  *tickless > self->wakeup_at)
-        *tickless = self->wakeup_at;
-    return 0;
-}
-
-//  Client hash function to execute timers, if any.
-//  This method might be replaced with a sorted list of timers;
-//  to be tested & tuned with 10K clients; could be a utility
-//  class in CZMQ
-
-static int
-s_client_timer (const char *key, void *client, void *argument)
-{
-    s_client_t *self = (s_client_t *) client;
-    
-    //  Expire client after timeout seconds of silence
-    if (self->expires_at
-    &&  self->expires_at <= zclock_time ()) {
-        s_client_execute (self, expired_event);
-        //  In case dialog doesn't handle expiry by destroying 
-        //  client, cancel expiry timer to prevent busy-looping
-        self->expires_at = 0;
-    }
-    else
-    if (self->wakeup_at
-    &&  self->wakeup_at <= zclock_time ())
-        s_client_execute (self, self->wakeup_event);
-        
-    return 0;
-}
-
 //  Do we accept a request off the mailbox? If so, return the event for
 //  the message, and load the message into the current client request.
 //  If not, return NULL_event;
@@ -509,7 +509,11 @@ s_client_execute (s_client_t *self, int event)
 {
     printf ("\n");              //  Delimit each client block
     self->next_event = event;
-    self->wakeup_at = 0;        //  Cancel wakeup alarm if any
+    //  Cancel wakeup timer, if any was pending
+    if (self->wakeup_timer) {
+        zloop_timer_end (self->server->loop, self->wakeup_timer);
+        self->wakeup_timer = 0;
+    }
     while (self->next_event != NULL_event) {
         self->event = self->next_event;
         self->next_event = NULL_event;
@@ -1170,6 +1174,26 @@ s_client_execute (s_client_t *self, int event)
     }
 }
 
+//  zloop callback when client inactivity timer expires
+
+static int
+s_client_expired (zloop_t *loop, int timer_id, void *argument)
+{
+    s_client_t *self = (s_client_t *) argument;
+    s_client_execute (self, expired_event);
+    return 0;
+}
+
+//  zloop callback when client wakeup timer expires
+
+static int
+s_client_wakeup (zloop_t *loop, int timer_id, void *argument)
+{
+    s_client_t *self = (s_client_t *) argument;
+    s_client_execute (self, self->wakeup_event);
+    return 0;
+}
+
 
 //  Server methods
 
@@ -1178,16 +1202,9 @@ s_server_config_self (s_server_t *self)
 {
     //  Built-in server configuration options
     //  
-    //  Default client timeout is 60 seconds, if state machine defines
-    //  an expired event; otherwise there is no timeout.
+    //  Default client timeout is 60 seconds
     self->timeout = atoi (
         zconfig_resolve (self->config, "server/timeout", "60000"));
-
-    //  Monitor the server every this often, if the state machine defines
-    //  a server-monitor event.
-    self->monitor = atoi (
-        zconfig_resolve (self->config, "server/monitor", "5"));
-    self->monitor_at = zclock_time () + self->monitor;
 
     //  Do we want to run server in the background?
     int background = atoi (
@@ -1202,15 +1219,19 @@ s_server_new (zctx_t *ctx, void *pipe)
     s_server_t *self = (s_server_t *) zmalloc (sizeof (s_server_t));
     assert (self);
     assert ((s_server_t *) &self->server == self);
-    server_initialize (&self->server);
-    
+
     self->ctx = ctx;
     self->pipe = pipe;
     self->router = zsocket_new (self->ctx, ZMQ_ROUTER);
     self->clients = zhash_new ();
     self->log = zlog_new ("zpipes_server");
     self->config = zconfig_new ("root", NULL);
+    self->loop = zloop_new ();
     s_server_config_self (self);
+
+    //  Initialize application server context
+    self->server.ctx = ctx;
+    server_initialize (&self->server);
 
     s_satisfy_pedantic_compilers ();
     return self;
@@ -1223,6 +1244,7 @@ s_server_destroy (s_server_t **self_p)
     if (*self_p) {
         s_server_t *self = *self_p;
         server_terminate (&self->server);
+        zloop_destroy (&self->loop);
         zsocket_destroy (self->ctx, self->router);
         zconfig_destroy (&self->config);
         zhash_destroy (&self->clients);
@@ -1245,15 +1267,13 @@ s_server_apply_config (s_server_t *self)
         section = zconfig_child (section);
 
     while (section) {
-        zconfig_t *entry = zconfig_child (section);
-        while (entry) {
-            if (streq (zconfig_name (entry), "echo"))
-                zlog_notice (self->log, "%s", zconfig_value (entry));
-            entry = zconfig_next (entry);
-        }
+        if (streq (zconfig_name (section), "echo"))
+            zlog_notice (self->log, "%s", zconfig_value (section));
+        else
         if (streq (zconfig_name (section), "bind")) {
             char *endpoint = zconfig_resolve (section, "endpoint", "?");
-            self->port = zsocket_bind (self->router, "%s", endpoint);
+            int rc = zsocket_bind (self->router, "%s", endpoint);
+            assert (rc != -1);
         }
         section = zconfig_next (section);
     }
@@ -1261,14 +1281,19 @@ s_server_apply_config (s_server_t *self)
 }
 
 //  Process message from pipe
-static void
-s_server_control_message (s_server_t *self)
+
+static int
+s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
 {
+    s_server_t *self = (s_server_t *) argument;
     zmsg_t *msg = zmsg_recv (self->pipe);
+    if (!msg)
+        return -1;              //  Interrupted; exit zloop
     char *method = zmsg_popstr (msg);
     if (streq (method, "BIND")) {
         char *endpoint = zmsg_popstr (msg);
         self->port = zsocket_bind (self->router, "%s", endpoint);
+        assert (self->port != -1);
         zstr_sendf (self->pipe, "%d", self->port);
         free (endpoint);
     }
@@ -1300,41 +1325,52 @@ s_server_control_message (s_server_t *self)
         zstr_send (self->pipe, "OK");
         self->terminated = true;
     }
+    else
+        zlog_error (self->log, "Invalid API method: %s", method);
+
     free (method);
     zmsg_destroy (&msg);
+    return 0;
 }
 
 //  Handle a message (a protocol request) from the client
 
-static void
-s_server_client_message (s_server_t *self)
+static int
+s_server_client_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
 {
-    zpipes_msg_t *request = zpipes_msg_recv (self->router);
-    if (!request)
-        return;         //  Interrupted; do nothing
+    s_server_t *self = (s_server_t *) argument;
+    zpipes_msg_t *msg = zpipes_msg_recv (self->router);
+    if (!msg)
+        return -1;              //  Interrupted; exit zloop
 
-    char *hashkey = zframe_strhex (zpipes_msg_routing_id (request));
+    char *hashkey = zframe_strhex (zpipes_msg_routing_id (msg));
     s_client_t *client = (s_client_t *) zhash_lookup (self->clients, hashkey);
     if (client == NULL) {
-        client = s_client_new (self, zpipes_msg_routing_id (request));
+        client = s_client_new (self, zpipes_msg_routing_id (msg));
         zhash_insert (self->clients, hashkey, client);
         zhash_freefn (self->clients, hashkey, s_client_free);
     }
     free (hashkey);
 
     //  Any input from client counts as activity
-    client->expires_at = zclock_time () + self->timeout;
-
+    if (client->expiry_timer)
+        zloop_timer_end (self->loop, client->expiry_timer);
+    //  Reset expiry timer
+    client->expiry_timer = zloop_timer (
+        self->loop, self->timeout, 1, s_client_expired, client);
+        
     //  Queue request and possibly pass it to client state machine
-    zlist_append (client->mailbox, request);
+    zlist_append (client->mailbox, msg);
     event_t event = s_client_filter_mailbox (client);
     if (event != NULL_event)
         s_client_execute (client, event);
+        
+    return 0;
 }
-
 
 //  Finally here's the server thread itself, which polls its two
 //  sockets and processes incoming messages
+
 static void
 s_server_task (void *args, zctx_t *ctx, void *pipe)
 {
@@ -1343,37 +1379,10 @@ s_server_task (void *args, zctx_t *ctx, void *pipe)
     zlog_notice (self->log, "Starting zpipes_server service");
     zstr_send (self->pipe, "OK");
 
-    zmq_pollitem_t items [] = {
-        { self->pipe, 0, ZMQ_POLLIN, 0 },
-        { self->router, 0, ZMQ_POLLIN, 0 }
-    };
-    self->monitor_at = zclock_time () + self->monitor;
-    while (!self->terminated && !zctx_interrupted) {
-        //  Calculate tickless timer, up to monitor time
-        uint64_t tickless = zclock_time () + self->monitor;
-        zhash_foreach (self->clients, s_client_tickless, &tickless);
-
-        //  Poll until at most next timer event
-        int rc = zmq_poll (items, 2,
-            (tickless - zclock_time ()) * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Context has been shut down
-
-        //  Process incoming message from either socket
-        if (items [0].revents & ZMQ_POLLIN)
-            s_server_control_message (self);
-
-        if (items [1].revents & ZMQ_POLLIN)
-            s_server_client_message (self);
-
-        //  Execute client timer events
-        zhash_foreach (self->clients, s_client_timer, NULL);
-        
-        //  If clock went past timeout, then monitor server
-        if (zclock_time () >= self->monitor_at) {
-            self->monitor_at = zclock_time () + self->monitor;
-        }
-    }
+    engine_handle_socket ((server_t *) self, self->pipe, s_server_control_message);
+    engine_handle_socket ((server_t *) self, self->router, s_server_client_message);
+    zloop_start (self->loop);
+    
     zlog_notice (self->log, "Terminating zpipes_server service");
     s_server_destroy (&self);
 }

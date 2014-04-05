@@ -43,9 +43,9 @@ void
 void
     zpipes_server_configure (zpipes_server_t *self, const char *config_file);
 
-//  Set one configuration path value
+//  Set one configuration option value
 void
-    zpipes_server_setoption (zpipes_server_t *self, const char *path, const char *value);
+    zpipes_server_set (zpipes_server_t *self, const char *path, const char *value);
 
 //  Binds the server to an endpoint, formatted as printf string
 long

@@ -9,14 +9,18 @@
     <grammar>
     ZPIPES = reader | writer
 
-    reader = input-command *read-command close-command
-    input-command = c:input ( s:input-ok | s:failed )
-    fetch-command = c:read ( s:read-ok | s:empty | s:timeout | s:failed )
-    close-command = c:close ( s:close-ok | s:failed )
+    reader = input-command *( read-command | ping-command )
+             close-command
+    input-command = c:input ( s:input-ok | s:input-failed )
+    read-command = c:read ( s:read-ok | s:read-end
+                          | s:read-timeout | s:read-failed )
+    close-command = c:close ( s:close-ok | s:close-failed )
 
     writer = output-command *write-command close-command
-    output = c:output ( s:output-ok | s:failed )
-    store = c:write ( s:write-ok | s:failed )
+    output-command = c:output ( s:output-ok | s:output-failed )
+    write-command = c:write ( s:write-ok
+                            | s:write-timeout | s:write-failed )
+    ping-command = c:ping s:ping-ok
     </grammar>
 
     <message name = "input">
@@ -28,8 +32,8 @@
         Input request was successful
     </message>
 
-    <message name = "failed">
-        Input or output request failed
+    <message name = "input failed">
+        Input request failed
         <field name = "reason" type = "string">Reason for failure</field>
     </message>
 
@@ -42,6 +46,11 @@
         Output request was successful
     </message>
 
+    <message name = "output failed">
+        Output request failed
+        <field name = "reason" type = "string">Reason for failure</field>
+    </message>
+    
     <message name = "read">
         Read a chunk of data from pipe
         <field name = "size" type = "number" size = "4">Number of bytes to read</field>
@@ -53,12 +62,17 @@
         <field name = "chunk" type = "chunk">Chunk of data</field>
     </message>
 
-    <message name = "end of pipe">
+    <message name = "read end">
         Pipe is closed, no more data
     </message>
 
-    <message name = "timeout">
-        Read or write ended with timeout
+    <message name = "read timeout">
+        Read ended with timeout
+    </message>
+
+    <message name = "read failed">
+        Read failed due to error
+        <field name = "reason" type = "string">Reason for failure</field>
     </message>
 
     <message name = "write">
@@ -71,11 +85,37 @@
         Write was successful
     </message>
 
+    <message name = "write timeout">
+        Write ended with timeout
+    </message>
+
+    <message name = "write failed">
+        Read failed due to error
+        <field name = "reason" type = "string">Reason for failure</field>
+    </message>
+
     <message name = "close">
         Close pipe
     </message>
 
     <message name = "close ok">
         Close was successful
+    </message>
+    
+    <message name = "close failed">
+        Close failed due to error
+        <field name = "reason" type = "string">Reason for failure</field>
+    </message>
+    
+    <message name = "ping">
+        Signal liveness
+    </message>
+
+    <message name = "ping ok">
+        Respond to ping
+    </message>
+    
+    <message name = "invalid">
+        Command was invalid at this time
     </message>
 </class>

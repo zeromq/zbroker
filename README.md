@@ -35,57 +35,94 @@ The following ABNF grammar defines the ZPIPES protocol:
 
     ZPIPES = reader | writer
 
-    reader = input-command *fetch-command close-command
-    input-command = c:input ( s:ready | s:failed )
-    fetch-command = c:fetch ( s:fetched | s:empty | s:timeout | s:failed )
-    close-command = c:close ( s:closed | s:failed )
+    reader = input-command *( read-command | ping-command )
+             close-command
+    input-command = c:input ( s:input-ok | s:input-failed )
+    read-command = c:read ( s:read-ok | s:read-end
+                          | s:read-timeout | s:read-failed )
+    close-command = c:close ( s:close-ok | s:close-failed )
 
-    writer = output-command *store-command close-command
-    output = c:output ( s:ready | s:failed )
-    store = c:store ( s:stored | s:failed )
+    writer = output-command *write-command close-command
+    output-command = c:output ( s:output-ok | s:output-failed )
+    write-command = c:write ( s:write-ok
+                            | s:write-timeout | s:write-failed )
+    ping-command = c:ping s:ping-ok
 
     ;         Create a new pipe for reading
-    C:input         = signature %d1 pipename
-    signature       = %xAA %d0              ; two octets
+    input           = signature %d1 pipename
+    signature       = %xAA %xA0             ; two octets
     pipename        = string                ; Name of pipe
 
-    ;         Create a new pipe for writing
-    C:output        = signature %d2 pipename
-    pipename        = string                ; Name of pipe
+    ;         Input request was successful
+    input_ok        = signature %d2
 
-    ;         Input or output request was successful
-    C:ready         = signature %d3
-
-    ;         Input or output request failed
-    C:failed        = signature %d4 reason
+    ;         Input request failed
+    input_failed    = signature %d3 reason
     reason          = string                ; Reason for failure
 
-    ;         Read next chunk of data from pipe
-    C:fetch         = signature %d5 timeout
+    ;         Create a new pipe for writing
+    output          = signature %d4 pipename
+    pipename        = string                ; Name of pipe
+
+    ;         Output request was successful
+    output_ok       = signature %d5
+
+    ;         Output request failed
+    output_failed   = signature %d6 reason
+    reason          = string                ; Reason for failure
+
+    ;         Read a chunk of data from pipe
+    read            = signature %d7 size timeout
+    size            = number-4              ; Number of bytes to read
     timeout         = number-4              ; Timeout, msecs, or zero
 
-    ;         Have data from pipe
-    C:fetched       = signature %d6 chunk
+    ;         Read was successful
+    read_ok         = signature %d8 chunk
     chunk           = chunk                 ; Chunk of data
 
     ;         Pipe is closed, no more data
-    C:end_of_pipe   = signature %d7
+    read_end        = signature %d9
 
-    ;         Get or put ended with timeout
-    C:timeout       = signature %d8
+    ;         Read ended with timeout
+    read_timeout    = signature %d10
+
+    ;         Read failed due to error
+    read_failed     = signature %d11 reason
+    reason          = string                ; Reason for failure
 
     ;         Write chunk of data to pipe
-    C:store         = signature %d9 chunk
+    write           = signature %d12 chunk timeout
     chunk           = chunk                 ; Chunk of data
+    timeout         = number-4              ; Timeout, msecs, or zero
 
-    ;         Store was successful
-    C:stored        = signature %d10
+    ;         Write was successful
+    write_ok        = signature %d13
+
+    ;         Write ended with timeout
+    write_timeout   = signature %d14
+
+    ;         Read failed due to error
+    write_failed    = signature %d15 reason
+    reason          = string                ; Reason for failure
 
     ;         Close pipe
-    C:close         = signature %d11
+    close           = signature %d16
 
     ;         Close was successful
-    C:closed        = signature %d12
+    close_ok        = signature %d17
+
+    ;         Close failed due to error
+    close_failed    = signature %d18 reason
+    reason          = string                ; Reason for failure
+
+    ;         Signal liveness
+    ping            = signature %d19
+
+    ;         Respond to ping
+    ping_ok         = signature %d20
+
+    ;         Command was invalid at this time
+    invalid         = signature %d21
 
     ; A chunk has 4-octet length + binary contents
     chunk           = number-4 *OCTET

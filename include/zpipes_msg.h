@@ -31,13 +31,16 @@
 
     INPUT_OK - Input request was successful
 
-    FAILED - Input or output request failed
+    INPUT_FAILED - Input request failed
         reason              string      Reason for failure
 
     OUTPUT - Create a new pipe for writing
         pipename            string      Name of pipe
 
     OUTPUT_OK - Output request was successful
+
+    OUTPUT_FAILED - Output request failed
+        reason              string      Reason for failure
 
     READ - Read a chunk of data from pipe
         size                number 4    Number of bytes to read
@@ -46,9 +49,12 @@
     READ_OK - Read was successful
         chunk               chunk       Chunk of data
 
-    END_OF_PIPE - Pipe is closed, no more data
+    READ_END - Pipe is closed, no more data
 
-    TIMEOUT - Read or write ended with timeout
+    READ_TIMEOUT - Read ended with timeout
+
+    READ_FAILED - Read failed due to error
+        reason              string      Reason for failure
 
     WRITE - Write chunk of data to pipe
         chunk               chunk       Chunk of data
@@ -56,25 +62,47 @@
 
     WRITE_OK - Write was successful
 
+    WRITE_TIMEOUT - Write ended with timeout
+
+    WRITE_FAILED - Read failed due to error
+        reason              string      Reason for failure
+
     CLOSE - Close pipe
 
     CLOSE_OK - Close was successful
+
+    CLOSE_FAILED - Close failed due to error
+        reason              string      Reason for failure
+
+    PING - Signal liveness
+
+    PING_OK - Respond to ping
+
+    INVALID - Command was invalid at this time
 */
 
 
 #define ZPIPES_MSG_INPUT                    1
 #define ZPIPES_MSG_INPUT_OK                 2
-#define ZPIPES_MSG_FAILED                   3
+#define ZPIPES_MSG_INPUT_FAILED             3
 #define ZPIPES_MSG_OUTPUT                   4
 #define ZPIPES_MSG_OUTPUT_OK                5
-#define ZPIPES_MSG_READ                     6
-#define ZPIPES_MSG_READ_OK                  7
-#define ZPIPES_MSG_END_OF_PIPE              8
-#define ZPIPES_MSG_TIMEOUT                  9
-#define ZPIPES_MSG_WRITE                    10
-#define ZPIPES_MSG_WRITE_OK                 11
-#define ZPIPES_MSG_CLOSE                    12
-#define ZPIPES_MSG_CLOSE_OK                 13
+#define ZPIPES_MSG_OUTPUT_FAILED            6
+#define ZPIPES_MSG_READ                     7
+#define ZPIPES_MSG_READ_OK                  8
+#define ZPIPES_MSG_READ_END                 9
+#define ZPIPES_MSG_READ_TIMEOUT             10
+#define ZPIPES_MSG_READ_FAILED              11
+#define ZPIPES_MSG_WRITE                    12
+#define ZPIPES_MSG_WRITE_OK                 13
+#define ZPIPES_MSG_WRITE_TIMEOUT            14
+#define ZPIPES_MSG_WRITE_FAILED             15
+#define ZPIPES_MSG_CLOSE                    16
+#define ZPIPES_MSG_CLOSE_OK                 17
+#define ZPIPES_MSG_CLOSE_FAILED             18
+#define ZPIPES_MSG_PING                     19
+#define ZPIPES_MSG_PING_OK                  20
+#define ZPIPES_MSG_INVALID                  21
 
 #ifdef __cplusplus
 extern "C" {
@@ -133,9 +161,9 @@ int
 int
     zpipes_msg_send_input_ok (void *output);
     
-//  Send the FAILED to the output in one step
+//  Send the INPUT_FAILED to the output in one step
 int
-    zpipes_msg_send_failed (void *output,
+    zpipes_msg_send_input_failed (void *output,
         const char *reason);
     
 //  Send the OUTPUT to the output in one step
@@ -146,6 +174,11 @@ int
 //  Send the OUTPUT_OK to the output in one step
 int
     zpipes_msg_send_output_ok (void *output);
+    
+//  Send the OUTPUT_FAILED to the output in one step
+int
+    zpipes_msg_send_output_failed (void *output,
+        const char *reason);
     
 //  Send the READ to the output in one step
 int
@@ -158,13 +191,18 @@ int
     zpipes_msg_send_read_ok (void *output,
         zchunk_t *chunk);
     
-//  Send the END_OF_PIPE to the output in one step
+//  Send the READ_END to the output in one step
 int
-    zpipes_msg_send_end_of_pipe (void *output);
+    zpipes_msg_send_read_end (void *output);
     
-//  Send the TIMEOUT to the output in one step
+//  Send the READ_TIMEOUT to the output in one step
 int
-    zpipes_msg_send_timeout (void *output);
+    zpipes_msg_send_read_timeout (void *output);
+    
+//  Send the READ_FAILED to the output in one step
+int
+    zpipes_msg_send_read_failed (void *output,
+        const char *reason);
     
 //  Send the WRITE to the output in one step
 int
@@ -176,6 +214,15 @@ int
 int
     zpipes_msg_send_write_ok (void *output);
     
+//  Send the WRITE_TIMEOUT to the output in one step
+int
+    zpipes_msg_send_write_timeout (void *output);
+    
+//  Send the WRITE_FAILED to the output in one step
+int
+    zpipes_msg_send_write_failed (void *output,
+        const char *reason);
+    
 //  Send the CLOSE to the output in one step
 int
     zpipes_msg_send_close (void *output);
@@ -183,6 +230,23 @@ int
 //  Send the CLOSE_OK to the output in one step
 int
     zpipes_msg_send_close_ok (void *output);
+    
+//  Send the CLOSE_FAILED to the output in one step
+int
+    zpipes_msg_send_close_failed (void *output,
+        const char *reason);
+    
+//  Send the PING to the output in one step
+int
+    zpipes_msg_send_ping (void *output);
+    
+//  Send the PING_OK to the output in one step
+int
+    zpipes_msg_send_ping_ok (void *output);
+    
+//  Send the INVALID to the output in one step
+int
+    zpipes_msg_send_invalid (void *output);
     
 //  Duplicate the zpipes_msg message
 zpipes_msg_t *

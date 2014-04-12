@@ -158,13 +158,16 @@ typedef enum {
     read_event = 6,
     close_event = 7,
     expired_event = 8,
-    have_reader_event = 9,
-    wakeup_event = 10,
-    read_nothing_event = 11,
-    have_data_event = 12,
-    not_enough_data_event = 13,
-    pipe_terminated_event = 14,
-    ping_event = 15
+    reader_dropped_event = 9,
+    have_reader_event = 10,
+    wakeup_event = 11,
+    writer_dropped_event = 12,
+    have_data_event = 13,
+    not_enough_data_event = 14,
+    zero_read_event = 15,
+    pipe_shut_event = 16,
+    ping_event = 17,
+    have_writer_event = 18
 } event_t;
 
 //  Names for animation
@@ -193,13 +196,16 @@ s_event_name [] = {
     "READ",
     "CLOSE",
     "expired",
+    "reader dropped",
     "have reader",
     "wakeup",
-    "read nothing",
+    "writer dropped",
     "have data",
     "not enough data",
-    "pipe terminated",
-    "PING"
+    "zero read",
+    "pipe shut",
+    "PING",
+    "have writer"
 };
  
 
@@ -218,7 +224,7 @@ typedef struct {
     zhash_t *clients;           //  Clients we're connected to
     zconfig_t *config;          //  Configuration tree
     zlog_t *log;                //  Server logger
-    uint client_count;          //  Client identifier counter
+    uint client_id;             //  Client identifier counter
     size_t timeout;             //  Default client expiry timeout
     bool terminated;            //  Server is shutting down
 } s_server_t;
@@ -412,7 +418,7 @@ s_client_new (s_server_t *server, zframe_t *routing_id)
     self->hashkey = zframe_strhex (routing_id);
     self->routing_id = zframe_dup (routing_id);
     self->mailbox = zlist_new ();
-    self->unique_id = ++(server->client_count);
+    self->unique_id = server->client_id++;
     
     self->client.server = (server_t *) server;
     self->client.reply = zpipes_msg_new (0);
@@ -433,6 +439,11 @@ s_client_destroy (s_client_t **self_p)
         s_client_t *self = *self_p;
         zpipes_msg_destroy (&self->client.request);
         zpipes_msg_destroy (&self->client.reply);
+        
+        if (self->wakeup_timer)
+            zloop_timer_end (self->server->loop, self->wakeup_timer);
+        if (self->expiry_timer)
+            zloop_timer_end (self->server->loop, self->expiry_timer);
 
         //  Empty and destroy mailbox
         zpipes_msg_t *request = (zpipes_msg_t *) zlist_first (self->mailbox);
@@ -507,7 +518,6 @@ s_client_filter_mailbox (s_client_t *self)
 static void
 s_client_execute (s_client_t *self, int event)
 {
-    printf ("\n");              //  Delimit each client block
     self->next_event = event;
     //  Cancel wakeup timer, if any was pending
     if (self->wakeup_timer) {
@@ -564,6 +574,9 @@ s_client_execute (s_client_t *self, int event)
                         self->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
                     }
+                }
+                else
+                if (self->event == have_writer_event) {
                 }
                 else
                 if (self->event == have_reader_event) {
@@ -695,6 +708,14 @@ s_client_execute (s_client_t *self, int event)
                     }
                 }
                 else
+                if (self->event == reader_dropped_event) {
+                    if (!self->exception) {
+                        //  close pipe writer
+                        zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                        close_pipe_writer (&self->client);
+                    }
+                }
+                else
                 if (self->event == ping_event) {
                     if (!self->exception) {
                         //  send ping_ok
@@ -704,6 +725,9 @@ s_client_execute (s_client_t *self, int event)
                         self->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
                     }
+                }
+                else
+                if (self->event == have_writer_event) {
                 }
                 else
                 if (self->event == have_reader_event) {
@@ -808,6 +832,14 @@ s_client_execute (s_client_t *self, int event)
                     }
                 }
                 else
+                if (self->event == reader_dropped_event) {
+                    if (!self->exception) {
+                        //  close pipe writer
+                        zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                        close_pipe_writer (&self->client);
+                    }
+                }
+                else
                 if (self->event == ping_event) {
                     if (!self->exception) {
                         //  send ping_ok
@@ -880,17 +912,6 @@ s_client_execute (s_client_t *self, int event)
                         self->state = processing_read_state;
                 }
                 else
-                if (self->event == read_nothing_event) {
-                    if (!self->exception) {
-                        //  send read_end
-                        zclock_log ("%6d:         $ send READ_END", self->unique_id);
-                        zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_END);
-                        zpipes_msg_send (&self->client.reply, self->server->router);
-                        self->client.reply = zpipes_msg_new (0);
-                        zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
-                    }
-                }
-                else
                 if (self->event == write_event) {
                     if (!self->exception) {
                         //  send invalid
@@ -938,6 +959,14 @@ s_client_execute (s_client_t *self, int event)
                     }
                 }
                 else
+                if (self->event == writer_dropped_event) {
+                    if (!self->exception) {
+                        //  close pipe reader
+                        zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                        close_pipe_reader (&self->client);
+                    }
+                }
+                else
                 if (self->event == ping_event) {
                     if (!self->exception) {
                         //  send ping_ok
@@ -947,6 +976,9 @@ s_client_execute (s_client_t *self, int event)
                         self->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
                     }
+                }
+                else
+                if (self->event == have_writer_event) {
                 }
                 else
                 if (self->event == have_reader_event) {
@@ -1002,7 +1034,20 @@ s_client_execute (s_client_t *self, int event)
                 if (self->event == not_enough_data_event) {
                 }
                 else
-                if (self->event == pipe_terminated_event) {
+                if (self->event == zero_read_event) {
+                    if (!self->exception) {
+                        //  send read_end
+                        zclock_log ("%6d:         $ send READ_END", self->unique_id);
+                        zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_END);
+                        zpipes_msg_send (&self->client.reply, self->server->router);
+                        self->client.reply = zpipes_msg_new (0);
+                        zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
+                    }
+                    if (!self->exception)
+                        self->state = reading_state;
+                }
+                else
+                if (self->event == pipe_shut_event) {
                     if (!self->exception) {
                         //  send read_end
                         zclock_log ("%6d:         $ send READ_END", self->unique_id);
@@ -1067,6 +1112,14 @@ s_client_execute (s_client_t *self, int event)
                     }
                 }
                 else
+                if (self->event == writer_dropped_event) {
+                    if (!self->exception) {
+                        //  close pipe reader
+                        zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                        close_pipe_reader (&self->client);
+                    }
+                }
+                else
                 if (self->event == ping_event) {
                     if (!self->exception) {
                         //  send ping_ok
@@ -1098,6 +1151,9 @@ s_client_execute (s_client_t *self, int event)
                         self->client.reply = zpipes_msg_new (0);
                         zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
                     }
+                }
+                else
+                if (self->event == have_writer_event) {
                 }
                 else
                 if (self->event == have_reader_event) {
@@ -1227,10 +1283,14 @@ s_server_new (zctx_t *ctx, void *pipe)
     self->log = zlog_new ("zpipes_server");
     self->config = zconfig_new ("root", NULL);
     self->loop = zloop_new ();
+    srandom ((unsigned) time (NULL));
+    self->client_id = randof (1000);
     s_server_config_self (self);
 
     //  Initialize application server context
-    self->server.ctx = ctx;
+    self->server.ctx = self->ctx;
+    self->server.log = self->log;
+    self->server.config = self->config;
     server_initialize (&self->server);
 
     s_satisfy_pedantic_compilers ();
@@ -1244,10 +1304,11 @@ s_server_destroy (s_server_t **self_p)
     if (*self_p) {
         s_server_t *self = *self_p;
         server_terminate (&self->server);
-        zloop_destroy (&self->loop);
         zsocket_destroy (self->ctx, self->router);
         zconfig_destroy (&self->config);
         zhash_destroy (&self->clients);
+        zloop_destroy (&self->loop);
+        zlog_destroy (&self->log);
         free (self);
         *self_p = NULL;
     }
@@ -1302,8 +1363,10 @@ s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
         char *config_file = zmsg_popstr (msg);
         zconfig_destroy (&self->config);
         self->config = zconfig_load (config_file);
-        if (self->config)
+        if (self->config) {
             s_server_apply_config (self);
+            self->server.config = self->config;
+        }
         else {
             zlog_warning (self->log,
                 "cannot load config file '%s'\n", config_file);
@@ -1376,13 +1439,13 @@ s_server_task (void *args, zctx_t *ctx, void *pipe)
 {
     s_server_t *self = s_server_new (ctx, pipe);
     assert (self);
-    zlog_notice (self->log, "Starting zpipes_server service");
+    zlog_notice (self->log, "starting zpipes_server service");
     zstr_send (self->pipe, "OK");
 
     engine_handle_socket ((server_t *) self, self->pipe, s_server_control_message);
     engine_handle_socket ((server_t *) self, self->router, s_server_client_message);
     zloop_start (self->loop);
     
-    zlog_notice (self->log, "Terminating zpipes_server service");
+    zlog_notice (self->log, "terminating zpipes_server service");
     s_server_destroy (&self);
 }

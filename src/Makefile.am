@@ -6,6 +6,7 @@ pkgconfig_DATA = libzbroker.pc libzpipesclient.pc
 include_HEADERS = \
 	../include/zbroker.h \
 	../include/zpipes_msg.h \
+	../include/zpipes_server.h \
 	../include/zpipes_client.h
 
 libzbroker_la_SOURCES = \
@@ -18,17 +19,17 @@ libzpipesclient_la_SOURCES = \
 
 AM_CFLAGS = -g
 AM_CPPFLAGS = -I$(top_srcdir)/include
-bin_PROGRAMS = zbroker zbroker_selftest
+bin_PROGRAMS = zbroker zbroker_selftest zpipes_test_cluster
 
 zbroker_selftest_LDADD = libzbroker.la libzpipesclient.la
-# zbroker_selftest_SOURCES = zbroker_selftest.c
+zpipes_test_cluster_LDADD = libzbroker.la libzpipesclient.la
 
 zbroker_LDADD = libzbroker.la
 
 libzbroker_la_LDFLAGS = -version-info @LTVER@
 libzpipesclient_la_LDFLAGS = -version-info @CLIENT_LTVER@
 
-TESTS = zbroker_selftest
+TESTS = zbroker_selftest zpipes_test_cluster
 
 # Produce generated models; do this manually in src directory
 code:

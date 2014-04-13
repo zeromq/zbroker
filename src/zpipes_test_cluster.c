@@ -18,6 +18,9 @@ int main (void)
     zpipes_server_t *hostb = zpipes_server_new ();
     zpipes_server_bind (hostb, "ipc://@/zpipes/hostb");
 
+    //  Give time for cluster to interconnect
+    zclock_sleep (250);
+
     s_wait ("Open reader");
     zpipes_client_t *reader = zpipes_client_new ("hosta", "test pipe");
     

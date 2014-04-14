@@ -44,6 +44,8 @@ src/test-suite.log
 src/zbroker_selftest
 src/zbroker_selftest.log
 src/zbroker_selftest.trs
+src/zpipes_test_cluster
+doit*
 *.la
 *.pc
 

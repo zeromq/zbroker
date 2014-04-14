@@ -49,6 +49,10 @@
             <action name = "close pipe writer" />
             <action name = "terminate" />
         </event>
+        <!-- We get this if a reader closed their end of the pipe -->
+        <event name = "reader dropped">
+            <action name = "close pipe writer" />
+        </event>
     </state>
 
     In this internal state, we either have a reader immediately, or
@@ -73,6 +77,10 @@
             <action name = "close pipe writer" />
             <action name = "terminate" />
         </event>
+        <!-- We get this if a reader closed their end of the pipe -->
+        <event name = "reader dropped">
+            <action name = "close pipe writer" />
+        </event>
     </state>
 
     <state name = "before reading">
@@ -92,10 +100,6 @@
         <event name = "READ" next = "processing read">
             <action name = "look for pipe data" />
         </event>
-        <!-- exception event if the reader asked for zero bytes -->
-        <event name = "read nothing">
-            <action name = "send" message = "READ END" />
-        </event>
         <event name = "WRITE">
             <action name = "send" message = "INVALID" />
             <action name = "terminate" />
@@ -107,6 +111,10 @@
         <event name = "expired">
             <action name = "close pipe reader" />
             <action name = "terminate" />
+        </event>
+        <!-- We get this if a writer closed their end of the pipe -->
+        <event name = "writer dropped">
+            <action name = "close pipe reader" />
         </event>
     </state>
 
@@ -122,11 +130,15 @@
         </event>
         <!-- exception event if not enough data yet -->
         <event name = "not enough data" />
-
-        <!-- exception event if the writer closed the pipe -->
-        <event name = "pipe terminated" next = "reading">
+        <!-- Client asked for zero bytes -->
+        <event name = "zero read" next = "reading">
             <action name = "send" message = "READ END" />
         </event>
+        <!-- Pipe has been closed by writer -->
+        <event name = "pipe shut" next = "reading">
+            <action name = "send" message = "READ END" />
+        </event>
+
         <!-- alarm wakeup event if nothing else happens -->
         <event name = "wakeup" next = "reading">
             <action name = "send" message = "READ TIMEOUT" />
@@ -139,6 +151,10 @@
         <event name = "expired">
             <action name = "close pipe reader" />
             <action name = "terminate" />
+        </event>
+        <!-- We get this if a writer closed their end of the pipe -->
+        <event name = "writer dropped">
+            <action name = "close pipe reader" />
         </event>
     </state>
 
@@ -154,9 +170,11 @@
             <action name = "send" message = "INVALID" />
             <action name = "terminate" />
         </event>
+        <!-- We get this if a writer arrives; ignore it -->
+        <event name = "have writer" />
         <!-- We get this if a reader arrives; ignore it -->
         <event name = "have reader" />
-        <!-- We get this if a writer joins; ignore it -->
+        <!-- We get this if a writer sends data; ignore it -->
         <event name = "have data" />
         <!-- This built-in event hits on a connection timeout -->
         <event name = "expired">

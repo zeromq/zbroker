@@ -657,7 +657,7 @@ zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument)
     if (!msg)
         return -1;              //  Interrupted
 
-    zmsg_dump (msg);
+//     zmsg_dump (msg);
     char *command = zmsg_popstr (msg);
     char *remote = zmsg_popstr (msg);
 

@@ -34,4 +34,4 @@ TESTS = zbroker_selftest zpipes_test_cluster
 # Produce generated models; do this manually in src directory
 code:
 	gsl -q zpipes_msg.xml
-	gsl -q -animate:1 zpipes_server.xml
+	gsl -q -animate:0 zpipes_server.xml

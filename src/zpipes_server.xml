@@ -37,9 +37,9 @@
         <event name = "WRITE" next = "processing write">
             <action name = "look for pipe reader" />
         </event>
+        <!-- Does not affect writer state -->
         <event name = "READ">
             <action name = "send" message = "INVALID" />
-            <action name = "terminate" />
         </event>
         <event name = "CLOSE" next = "start">
             <action name = "close pipe writer" />
@@ -100,9 +100,9 @@
         <event name = "READ" next = "processing read">
             <action name = "look for pipe data" />
         </event>
+        <!-- Does not affect reader state -->
         <event name = "WRITE">
             <action name = "send" message = "INVALID" />
-            <action name = "terminate" />
         </event>
         <event name = "CLOSE" next = "start">
             <action name = "close pipe reader" />

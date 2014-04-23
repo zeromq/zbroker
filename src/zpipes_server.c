@@ -311,10 +311,12 @@ static void
 pipe_drop_local_reader (pipe_t **self_p)
 {
     assert (self_p);
+    puts ("DROP LOCAL PIPE READER");
     if (*self_p) {
         pipe_t *self = *self_p;
         //  TODO: what if self->reader is REMOTE_NODE?
         self->reader = NULL;
+        puts ("YES DROP LOCAL READER");
         if (self->writer) {
             if (self->writer == REMOTE_NODE) {
                 //  Tell remote node we're dropping off
@@ -324,11 +326,14 @@ pipe_drop_local_reader (pipe_t **self_p)
                 zyre_whisper (self->server->zyre, self->remote, &msg);
             }
             else {
+        puts ("SEND READER DROPPED");
                 engine_send_event (self->writer, reader_dropped_event);
                 //  Don't destroy pipe yet - writer is still using it
                 *self_p = NULL;
             }
         }
+        else
+            puts ("NO WRITER APPARENTLY");
         pipe_destroy (self_p);
     }
 }
@@ -502,6 +507,7 @@ close_pipe_writer (client_t *self)
 static void
 close_pipe_reader (client_t *self)
 {
+    puts ("CLOSE PIPE READER");
     pipe_drop_local_reader (&self->pipe);
 }
 
@@ -513,8 +519,9 @@ close_pipe_reader (client_t *self)
 static void
 look_for_pipe_reader (client_t *self)
 {
-    assert (self->pipe);
-
+    if (self->pipe == NULL)
+        engine_set_next_event (self, pipe_shut_event);
+    else
     if (pipe_accepts_data (self->pipe))
         engine_set_next_event (self, have_reader_event);
     else
@@ -1050,6 +1057,44 @@ zpipes_server_test (bool verbose)
     //  Close reader2
     zpipes_msg_send_close (reader2);
     if (s_expect_reply (reader2, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  --------------------------------------------------------------------
+    //  Test reader closing while writer still active
+
+    //  Open writer on pipe
+    zpipes_msg_send_output (writer, "test pipe");
+    if (s_expect_reply (writer, ZPIPES_MSG_OUTPUT_OK))
+        assert (false);
+
+    //  Open reader on pipe
+    zpipes_msg_send_input (reader, "test pipe");
+    if (s_expect_reply (reader, ZPIPES_MSG_INPUT_OK))
+        assert (false);
+
+    //  Write one chunk to pipe
+    zpipes_msg_send_write (writer, chunk, 0);
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_OK))
+        assert (false);
+
+    //  Read should be successful
+    zpipes_msg_send_read (reader, 12, 0);
+    if (s_expect_reply (reader, ZPIPES_MSG_READ_OK))
+        assert (false);
+
+    //  Close reader
+    zpipes_msg_send_close (reader);
+    if (s_expect_reply (reader, ZPIPES_MSG_CLOSE_OK))
+        assert (false);
+
+    //  Write should fail
+    zpipes_msg_send_write (writer, chunk, 0);
+    if (s_expect_reply (writer, ZPIPES_MSG_WRITE_FAILED))
+        assert (false);
+
+    //  Close writer
+    zpipes_msg_send_close (writer);
+    if (s_expect_reply (writer, ZPIPES_MSG_CLOSE_OK))
         assert (false);
 
     //  --------------------------------------------------------------------

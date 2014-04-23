@@ -161,11 +161,11 @@ typedef enum {
     reader_dropped_event = 9,
     have_reader_event = 10,
     wakeup_event = 11,
-    writer_dropped_event = 12,
-    have_data_event = 13,
-    not_enough_data_event = 14,
-    zero_read_event = 15,
-    pipe_shut_event = 16,
+    pipe_shut_event = 12,
+    writer_dropped_event = 13,
+    have_data_event = 14,
+    not_enough_data_event = 15,
+    zero_read_event = 16,
     ping_event = 17,
     have_writer_event = 18
 } event_t;
@@ -199,11 +199,11 @@ s_event_name [] = {
     "reader dropped",
     "have reader",
     "wakeup",
+    "pipe shut",
     "writer dropped",
     "have data",
     "not enough data",
     "zero read",
-    "pipe shut",
     "PING",
     "have writer"
 };
@@ -793,6 +793,18 @@ s_client_execute (s_client_t *self, int event)
                     }
                 }
                 else
+                if (self->event == pipe_shut_event) {
+                    if (!self->exception) {
+                        //  send write_failed
+                        zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_WRITE_FAILED);
+                        zpipes_msg_send (&self->client.reply, self->server->router);
+                        self->client.reply = zpipes_msg_new (0);
+                        zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
+                    }
+                    if (!self->exception)
+                        self->state = writing_state;
+                }
+                else
                 if (self->event == reader_dropped_event) {
                     if (!self->exception) {
                         //  close pipe writer
@@ -1202,7 +1214,7 @@ s_server_new (zctx_t *ctx, void *pipe)
     self->log = zlog_new ("zpipes_server");
     self->config = zconfig_new ("root", NULL);
     self->loop = zloop_new ();
-    srandom ((unsigned) time (NULL));
+    srandom ((unsigned int) zclock_time ());
     self->client_id = randof (1000);
     s_server_config_self (self);
 

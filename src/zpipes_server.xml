@@ -77,6 +77,10 @@
             <action name = "close pipe writer" />
             <action name = "terminate" />
         </event>
+        <!-- Pipe has been closed by reader, so discard data -->
+        <event name = "pipe shut" next = "writing">
+            <action name = "send" message = "WRITE FAILED" />
+        </event>
         <!-- We get this if a reader closed their end of the pipe -->
         <event name = "reader dropped">
             <action name = "close pipe writer" />

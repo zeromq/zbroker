@@ -270,13 +270,13 @@ static void
 static void
     open_pipe_reader (client_t *self);
 static void
-    look_for_pipe_reader (client_t *self);
+    process_write_request (client_t *self);
 static void
     close_pipe_writer (client_t *self);
 static void
     pass_data_to_reader (client_t *self);
 static void
-    look_for_pipe_data (client_t *self);
+    process_read_request (client_t *self);
 static void
     close_pipe_reader (client_t *self);
 static void
@@ -638,8 +638,8 @@ s_client_execute (s_client_t *self, int event)
             case writing_state:
                 if (self->event == write_event) {
                     if (!self->exception) {
-                        //  look for pipe reader
-                        look_for_pipe_reader (&self->client);
+                        //  process write request
+                        process_write_request (&self->client);
                     }
                     if (!self->exception)
                         self->state = processing_write_state;
@@ -872,8 +872,8 @@ s_client_execute (s_client_t *self, int event)
             case reading_state:
                 if (self->event == read_event) {
                     if (!self->exception) {
-                        //  look for pipe data
-                        look_for_pipe_data (&self->client);
+                        //  process read request
+                        process_read_request (&self->client);
                     }
                     if (!self->exception)
                         self->state = processing_read_state;
@@ -1059,6 +1059,19 @@ s_client_execute (s_client_t *self, int event)
                         //  close pipe reader
                         close_pipe_reader (&self->client);
                     }
+                    if (!self->exception) {
+                        //  collect data to send
+                        collect_data_to_send (&self->client);
+                    }
+                    if (!self->exception) {
+                        //  send read_ok
+                        zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_OK);
+                        zpipes_msg_send (&self->client.reply, self->server->router);
+                        self->client.reply = zpipes_msg_new (0);
+                        zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
+                    }
+                    if (!self->exception)
+                        self->state = reading_state;
                 }
                 else
                 if (self->event == ping_event) {

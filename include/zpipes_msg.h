@@ -125,14 +125,14 @@ CZMQ_EXPORT void
 //  ZMQ_ROUTER, then parses the first frame as a routing_id. Destroys msg
 //  and nullifies the msg refernce.
 CZMQ_EXPORT zpipes_msg_t *
-    zpipes_msg_decode (zmsg_t **msg_p, int socket_type);
+    zpipes_msg_decode (zmsg_t **msg_p);
 
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
 //  object or NULL if error. Use when not in control of sending the message.
 //  If the socket_type is ZMQ_ROUTER, then stores the routing_id as the
 //  first frame of the resulting message.
 CZMQ_EXPORT zmsg_t *
-    zpipes_msg_encode (zpipes_msg_t *self, int socket_type);
+    zpipes_msg_encode (zpipes_msg_t **self_p);
 
 //  Receive and parse a zpipes_msg from the socket. Returns new object, 
 //  or NULL if error. Will block if there's no message waiting.
@@ -151,6 +151,114 @@ CZMQ_EXPORT int
 //  Send the zpipes_msg to the output, and do not destroy it
 CZMQ_EXPORT int
     zpipes_msg_send_again (zpipes_msg_t *self, void *output);
+
+//  Encode the INPUT 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_input (
+        const char *pipename);
+
+//  Encode the INPUT_OK 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_input_ok (
+);
+
+//  Encode the INPUT_FAILED 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_input_failed (
+        const char *reason);
+
+//  Encode the OUTPUT 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_output (
+        const char *pipename);
+
+//  Encode the OUTPUT_OK 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_output_ok (
+);
+
+//  Encode the OUTPUT_FAILED 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_output_failed (
+        const char *reason);
+
+//  Encode the READ 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_read (
+        uint32_t size,
+        uint32_t timeout);
+
+//  Encode the READ_OK 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_read_ok (
+        zchunk_t *chunk);
+
+//  Encode the READ_END 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_read_end (
+);
+
+//  Encode the READ_TIMEOUT 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_read_timeout (
+);
+
+//  Encode the READ_FAILED 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_read_failed (
+        const char *reason);
+
+//  Encode the WRITE 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_write (
+        zchunk_t *chunk,
+        uint32_t timeout);
+
+//  Encode the WRITE_OK 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_write_ok (
+);
+
+//  Encode the WRITE_TIMEOUT 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_write_timeout (
+);
+
+//  Encode the WRITE_FAILED 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_write_failed (
+        const char *reason);
+
+//  Encode the CLOSE 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_close (
+);
+
+//  Encode the CLOSE_OK 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_close_ok (
+);
+
+//  Encode the CLOSE_FAILED 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_close_failed (
+        const char *reason);
+
+//  Encode the PING 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_ping (
+);
+
+//  Encode the PING_OK 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_ping_ok (
+);
+
+//  Encode the INVALID 
+CZMQ_EXPORT zmsg_t *
+    zpipes_msg_encode_invalid (
+);
+
 
 //  Send the INPUT to the output in one step
 CZMQ_EXPORT int

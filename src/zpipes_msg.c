@@ -224,7 +224,7 @@ zpipes_msg_destroy (zpipes_msg_t **self_p)
 //  and nullifies the msg refernce.
 
 zpipes_msg_t *
-zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
+zpipes_msg_decode (zmsg_t **msg_p)
 {
     assert (msg_p);
     zmsg_t *msg = *msg_p;
@@ -232,15 +232,6 @@ zpipes_msg_decode (zmsg_t **msg_p, int socket_type)
         return NULL;
         
     zpipes_msg_t *self = zpipes_msg_new (0);
-    //  If message came from a router socket, first frame is routing_id
-    if (socket_type == ZMQ_ROUTER) {
-        self->routing_id = zmsg_pop (msg);
-        //  If message was not valid, forget about it
-        if (!self->routing_id || !zmsg_next (msg)) {
-            zpipes_msg_destroy (&self);
-            return (NULL);      //  Malformed or empty
-        }
-    }
     //  Read and parse command in frame
     zframe_t *frame = zmsg_pop (msg);
     if (!frame) 
@@ -375,7 +366,19 @@ zpipes_msg_recv (void *input)
 {
     assert (input);
     zmsg_t *msg = zmsg_recv (input);
-    return zpipes_msg_decode (&msg, zsocket_type (input));
+    //  If message came from a router socket, first frame is routing_id
+    zframe_t *routing_id = NULL;
+    if (zsocket_type (input) == ZMQ_ROUTER) {
+        routing_id = zmsg_pop (msg);
+        //  If message was not valid, forget about it
+        if (!routing_id || !zmsg_next (msg))
+            return NULL;        //  Malformed or empty
+    }
+    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
+    if (zsocket_type (input) == ZMQ_ROUTER)
+        zpipes_msg->routing_id = routing_id;
+        
+    return zpipes_msg;
 }
 
 
@@ -388,7 +391,19 @@ zpipes_msg_recv_nowait (void *input)
 {
     assert (input);
     zmsg_t *msg = zmsg_recv_nowait (input);
-    return zpipes_msg_decode (&msg, zsocket_type (input));
+    //  If message came from a router socket, first frame is routing_id
+    zframe_t *routing_id = NULL;
+    if (zsocket_type (input) == ZMQ_ROUTER) {
+        routing_id = zmsg_pop (msg);
+        //  If message was not valid, forget about it
+        if (!routing_id || !zmsg_next (msg))
+            return NULL;        //  Malformed or empty
+    }
+    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
+    if (zsocket_type (input) == ZMQ_ROUTER)
+        zpipes_msg->routing_id = routing_id;
+        
+    return zpipes_msg;
 }
 
 
@@ -398,15 +413,14 @@ zpipes_msg_recv_nowait (void *input)
 //  first frame of the resulting message.
 
 zmsg_t *
-zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
+zpipes_msg_encode (zpipes_msg_t **self_p)
 {
-    assert (self);
+    assert (self_p);
+    assert (*self_p);
+    
+    zpipes_msg_t *self = *self_p;
     zmsg_t *msg = zmsg_new ();
 
-    //  If we're sending to a ROUTER, send the routing_id first
-    if (socket_type == ZMQ_ROUTER)
-        zmsg_prepend (msg, &self->routing_id);
-        
     size_t frame_size = 2 + 1;          //  Signature and message ID
     switch (self->id) {
         case ZPIPES_MSG_INPUT:
@@ -649,14 +663,14 @@ zpipes_msg_encode (zpipes_msg_t *self, int socket_type)
     //  Now send the data frame
     if (zmsg_append (msg, &frame)) {
         zmsg_destroy (&msg);
-        zpipes_msg_destroy (&self);
+        zpipes_msg_destroy (self_p);
         return NULL;
     }
     //  Destroy zpipes_msg object
-    zpipes_msg_destroy (&self);
+    zpipes_msg_destroy (self_p);
     return msg;
-
 }
+
 
 //  --------------------------------------------------------------------------
 //  Send the zpipes_msg to the socket, and destroy it
@@ -669,8 +683,22 @@ zpipes_msg_send (zpipes_msg_t **self_p, void *output)
     assert (*self_p);
     assert (output);
 
+    //  Save routing_id if any, as encode will destroy it
     zpipes_msg_t *self = *self_p;
-    zmsg_t *msg = zpipes_msg_encode (self, zsocket_type (output));
+    zframe_t *routing_id = self->routing_id;
+    self->routing_id = NULL;
+
+    //  Encode zpipes_msg message to a single zmsg
+    zmsg_t *msg = zpipes_msg_encode (&self);
+    
+    //  If we're sending to a ROUTER, send the routing_id first
+    if (zsocket_type (output) == ZMQ_ROUTER) {
+        assert (routing_id);
+        zmsg_prepend (msg, &routing_id);
+    }
+    else
+        zframe_destroy (&routing_id);
+        
     if (msg && zmsg_send (&msg, output) == 0)
         return 0;
     else
@@ -688,6 +716,274 @@ zpipes_msg_send_again (zpipes_msg_t *self, void *output)
     assert (output);
     self = zpipes_msg_dup (self);
     return zpipes_msg_send (&self, output);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode INPUT message
+
+zmsg_t * 
+zpipes_msg_encode_input (
+    const char *pipename)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT);
+    zpipes_msg_set_pipename (self, pipename);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode INPUT_OK message
+
+zmsg_t * 
+zpipes_msg_encode_input_ok (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT_OK);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode INPUT_FAILED message
+
+zmsg_t * 
+zpipes_msg_encode_input_failed (
+    const char *reason)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT_FAILED);
+    zpipes_msg_set_reason (self, reason);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode OUTPUT message
+
+zmsg_t * 
+zpipes_msg_encode_output (
+    const char *pipename)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
+    zpipes_msg_set_pipename (self, pipename);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode OUTPUT_OK message
+
+zmsg_t * 
+zpipes_msg_encode_output_ok (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_OK);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode OUTPUT_FAILED message
+
+zmsg_t * 
+zpipes_msg_encode_output_failed (
+    const char *reason)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_FAILED);
+    zpipes_msg_set_reason (self, reason);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode READ message
+
+zmsg_t * 
+zpipes_msg_encode_read (
+    uint32_t size,
+    uint32_t timeout)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ);
+    zpipes_msg_set_size (self, size);
+    zpipes_msg_set_timeout (self, timeout);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode READ_OK message
+
+zmsg_t * 
+zpipes_msg_encode_read_ok (
+    zchunk_t *chunk)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_OK);
+    zchunk_t *chunk_copy = zchunk_dup (chunk);
+    zpipes_msg_set_chunk (self, &chunk_copy);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode READ_END message
+
+zmsg_t * 
+zpipes_msg_encode_read_end (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_END);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode READ_TIMEOUT message
+
+zmsg_t * 
+zpipes_msg_encode_read_timeout (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_TIMEOUT);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode READ_FAILED message
+
+zmsg_t * 
+zpipes_msg_encode_read_failed (
+    const char *reason)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_FAILED);
+    zpipes_msg_set_reason (self, reason);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode WRITE message
+
+zmsg_t * 
+zpipes_msg_encode_write (
+    zchunk_t *chunk,
+    uint32_t timeout)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE);
+    zchunk_t *chunk_copy = zchunk_dup (chunk);
+    zpipes_msg_set_chunk (self, &chunk_copy);
+    zpipes_msg_set_timeout (self, timeout);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode WRITE_OK message
+
+zmsg_t * 
+zpipes_msg_encode_write_ok (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_OK);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode WRITE_TIMEOUT message
+
+zmsg_t * 
+zpipes_msg_encode_write_timeout (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_TIMEOUT);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode WRITE_FAILED message
+
+zmsg_t * 
+zpipes_msg_encode_write_failed (
+    const char *reason)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_FAILED);
+    zpipes_msg_set_reason (self, reason);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode CLOSE message
+
+zmsg_t * 
+zpipes_msg_encode_close (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode CLOSE_OK message
+
+zmsg_t * 
+zpipes_msg_encode_close_ok (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE_OK);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode CLOSE_FAILED message
+
+zmsg_t * 
+zpipes_msg_encode_close_failed (
+    const char *reason)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE_FAILED);
+    zpipes_msg_set_reason (self, reason);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode PING message
+
+zmsg_t * 
+zpipes_msg_encode_ping (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_PING);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode PING_OK message
+
+zmsg_t * 
+zpipes_msg_encode_ping_ok (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_PING_OK);
+    return zpipes_msg_encode (&self);
+}
+
+
+//  --------------------------------------------------------------------------
+//  Encode INVALID message
+
+zmsg_t * 
+zpipes_msg_encode_invalid (
+)
+{
+    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INVALID);
+    return zpipes_msg_encode (&self);
 }
 
 

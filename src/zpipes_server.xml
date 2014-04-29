@@ -35,7 +35,7 @@
 
     <state name = "writing" inherit = "external">
         <event name = "WRITE" next = "processing write">
-            <action name = "look for pipe reader" />
+            <action name = "process write request" />
         </event>
         <!-- Does not affect writer state -->
         <event name = "READ">
@@ -102,7 +102,7 @@
 
     <state name = "reading" inherit = "external">
         <event name = "READ" next = "processing read">
-            <action name = "look for pipe data" />
+            <action name = "process read request" />
         </event>
         <!-- Does not affect reader state -->
         <event name = "WRITE">
@@ -127,12 +127,12 @@
     pipe.
 
     <state name = "processing read" inherit = "internal">
-        <!-- either immediately, or when data arrives -->
+        <!-- Either immediately, or when data arrives -->
         <event name = "have data" next = "reading">
             <action name = "collect data to send" />
             <action name = "send" message = "READ OK" />
         </event>
-        <!-- exception event if not enough data yet -->
+        <!-- Exception event if not enough data yet -->
         <event name = "not enough data" />
         <!-- Client asked for zero bytes -->
         <event name = "zero read" next = "reading">
@@ -157,8 +157,10 @@
             <action name = "terminate" />
         </event>
         <!-- We get this if a writer closed their end of the pipe -->
-        <event name = "writer dropped">
+        <event name = "writer dropped" next = "reading">
             <action name = "close pipe reader" />
+            <action name = "collect data to send" />
+            <action name = "send" message = "READ OK" />
         </event>
     </state>
 

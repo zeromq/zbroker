@@ -104,7 +104,8 @@ zpipes_client_destroy (zpipes_client_t **self_p)
 
 //  ---------------------------------------------------------------------
 //  Write chunk of data to pipe; returns number of bytes written, or -1
-//  in case of error, and then sets zpipes_client_error() to EBADF.
+//  in case of error. To get the actual error code, call
+//  zpipes_client_error(), which will be EINTR, EAGAIN, or EBADF.
 
 ssize_t
 zpipes_client_write (zpipes_client_t *self, void *data, size_t size, int timeout)
@@ -116,12 +117,31 @@ zpipes_client_write (zpipes_client_t *self, void *data, size_t size, int timeout
     zpipes_msg_set_chunk (request, &chunk);
     zpipes_msg_set_timeout (request, timeout);
     zpipes_msg_send (&request, self->dealer);
-    if (s_expect_reply (self, ZPIPES_MSG_WRITE_OK)) {
-        self->error = EBADF;
-        return -1;
+
+    zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
+    if (!reply) {
+        self->error = EINTR;
+        return -1;              //  Interrupted
+    }
+    ssize_t rc = size;
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_WRITE_TIMEOUT) {
+        self->error = EAGAIN;
+        rc = -1;
     }
     else
-        return size;
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_WRITE_FAILED) {
+        //  TODO: better error code?
+        //  This happens if we close a pipe while there's a pending write
+        self->error = EINTR;
+        rc = -1;
+    }
+    else
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_INVALID) {
+        self->error = EBADF;
+        rc = -1;
+    }
+    zpipes_msg_destroy (&reply);
+    return rc;
 }
 
 
@@ -143,27 +163,36 @@ zpipes_client_read (zpipes_client_t *self, void *data, size_t size, int timeout)
         self->error = EINTR;
         return -1;              //  Interrupted
     }
-    ssize_t bytes = 0;
+    ssize_t rc = 0;
     if (zpipes_msg_id (reply) == ZPIPES_MSG_READ_OK) {
         zchunk_t *chunk = zpipes_msg_chunk (reply);
-        bytes = zchunk_size (chunk);
+        ssize_t bytes = zchunk_size (chunk);
         assert (bytes <= size);
         memcpy (data, zchunk_data (chunk), bytes);
+        rc = bytes;
     }
     else
     if (zpipes_msg_id (reply) == ZPIPES_MSG_READ_END)
-        bytes = 0;
+        rc = 0;
     else
     if (zpipes_msg_id (reply) == ZPIPES_MSG_READ_TIMEOUT) {
         self->error = EAGAIN;
-        bytes = -1;
+        rc = -1;
     }
-    else {
+    else
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_READ_FAILED) {
+        //  TODO: better error code?
+        //  This happens if we close a pipe while there's a pending read
+        self->error = EINTR;
+        rc = -1;
+    }
+    else
+    if (zpipes_msg_id (reply) == ZPIPES_MSG_INVALID) {
         self->error = EBADF;
-        bytes = -1;
+        rc = -1;
     }
     zpipes_msg_destroy (&reply);
-    return bytes;
+    return rc;
 }
 
 

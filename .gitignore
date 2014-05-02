@@ -48,4 +48,5 @@ src/zpipes_test_cluster
 doit*
 *.la
 *.pc
-
+zpipes_test_cluster.log
+zpipes_test_cluster.trs

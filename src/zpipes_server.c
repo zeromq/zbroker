@@ -217,7 +217,9 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
         }
-        engine_send_event (self->writer, have_reader_event);
+        else
+            engine_send_event (self->writer, have_reader_event);
+
         return 0;
     }
     return -1;                  //  Pipe already has reader
@@ -273,7 +275,8 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
         }
-        engine_send_event (self->writer, have_writer_event);
+        else
+            engine_send_event (self->reader, have_writer_event);
         return 0;
     }
     return -1;

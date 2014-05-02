@@ -20,11 +20,11 @@ int main (void)
     //  Give time for cluster to interconnect
     zclock_sleep (250);
 
-    s_wait ("Open reader");
-    zpipes_client_t *reader = zpipes_client_new ("hosta", "test pipe");
-    
     s_wait ("Open writer");
     zpipes_client_t *writer = zpipes_client_new ("hostb", ">test pipe");
+
+    s_wait ("Open reader");
+    zpipes_client_t *reader = zpipes_client_new ("hosta", "test pipe");
 
     byte buffer [100];
     ssize_t bytes;

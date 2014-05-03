@@ -5,7 +5,7 @@
 static void
 s_wait (char *message)
 {
-//     puts (message);
+    puts (message);
 }
 
 
@@ -20,14 +20,15 @@ int main (void)
     //  Give time for cluster to interconnect
     zclock_sleep (250);
 
+    byte buffer [100];
+    ssize_t bytes;
+
+    //  Test 1 - simple read-write
     s_wait ("Open writer");
     zpipes_client_t *writer = zpipes_client_new ("hostb", ">test pipe");
 
     s_wait ("Open reader");
     zpipes_client_t *reader = zpipes_client_new ("hosta", "test pipe");
-
-    byte buffer [100];
-    ssize_t bytes;
 
     //  Expect timeout error, EAGAIN
     s_wait ("Read impatiently");
@@ -79,6 +80,22 @@ int main (void)
     s_wait ("Close reader");
     zpipes_client_destroy (&reader);
     
+    //  Test 2 - pipe reuse
+    s_wait ("Open reader");
+    reader = zpipes_client_new ("hosta", "test pipe 2");
+
+    s_wait ("Open writer");
+    writer = zpipes_client_new ("hostb", ">test pipe 2");
+
+    s_wait ("Close reader");
+    zpipes_client_destroy (&reader);
+
+    s_wait ("Close writer");
+    zpipes_client_destroy (&writer);
+
+    s_wait ("Open reader reusing pipe name");
+    reader = zpipes_client_new ("hosta", "test pipe 2");
+
     zpipes_server_destroy (&hosta);
     zpipes_server_destroy (&hostb);
     return 0;

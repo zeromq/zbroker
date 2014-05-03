@@ -48,6 +48,8 @@ s_expect_reply (zpipes_client_t *self, int message_id)
 
 //  ---------------------------------------------------------------------
 //  Constructor; open ">pipename" for writing, "pipename" for reading
+//  Returns a new client instance, or NULL if there was an error (e.g.
+//  two readers trying to access same pipe).
 
 zpipes_client_t *
 zpipes_client_new (const char *server_name, const char *pipe_name)
@@ -68,12 +70,12 @@ zpipes_client_new (const char *server_name, const char *pipe_name)
     if (*pipe_name == '>') {
         zpipes_msg_send_output (self->dealer, pipe_name + 1);
         if (s_expect_reply (self, ZPIPES_MSG_OUTPUT_OK))
-            assert (false);     //  Cannot happen in current use case
+            zpipes_client_destroy (&self);
     }
     else {
         zpipes_msg_send_input (self->dealer, pipe_name);
         if (s_expect_reply (self, ZPIPES_MSG_INPUT_OK))
-            assert (false);     //  Cannot happen in current use case
+            zpipes_client_destroy (&self);
     }
     return self;
 }
@@ -216,6 +218,7 @@ zpipes_client_test (bool verbose)
     printf (" * zpipes_client: ");
     //  @selftest
     zpipes_server_t *server = zpipes_server_new ();
+    zpipes_server_set (server, "server/animate", verbose? "1": "0");
     zpipes_server_bind (server, "ipc://@/zpipes/local");
 
     zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");

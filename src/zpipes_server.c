@@ -229,6 +229,7 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
 
         return 0;
     }
+//     engine_log (self, "pipe already has reader: ignored");
     return -1;                  //  Pipe already has reader
 }
 
@@ -244,6 +245,7 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote)
         //  This is how we indicate a remote reader
         self->reader = REMOTE_NODE;
         self->remote = strdup (remote);
+//         engine_server_log (self, "attach remote reader");
 
         if (self->writer) {
             //  Tell remote node we're acting as writer
@@ -251,9 +253,11 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote)
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
+//             engine_server_log (self, "tell peer we are now writer");
         }
         return 0;
     }
+//     engine_server_log (self, "pipe already has reader: ignored");
     return -1;                  //  Pipe already has reader
 }
 
@@ -273,6 +277,7 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_shout (self->server->zyre, "ZPIPES", &msg);
+//             engine_server_log (self, "broadcast we are now writer");
         }
         else
         if (self->reader == REMOTE_NODE) {
@@ -281,11 +286,14 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
+//             engine_server_log (self, "tell peer we are now writer");
         }
         else
             engine_send_event (self->reader, have_writer_event);
+        
         return 0;
     }
+//     engine_server_log (self, "pipe already has writer: ignored");
     return -1;
 }
 
@@ -301,6 +309,7 @@ pipe_attach_remote_writer (pipe_t *self, const char *remote)
         //  This is how we indicate a remote writer
         self->writer = REMOTE_NODE;
         self->remote = strdup (remote);
+//         engine_server_log (self, "attach remote writer");
 
         if (self->reader == NULL) {
             //  Tell remote node we're acting as reader
@@ -308,9 +317,11 @@ pipe_attach_remote_writer (pipe_t *self, const char *remote)
             zmsg_addstr (msg, "HAVE READER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
+//             engine_server_log (self, "tell peer we are now reader");
         }
         return 0;
     }
+//     engine_server_log (self, "pipe already has writer: ignored");
     return -1;
 }
 
@@ -332,6 +343,7 @@ pipe_drop_local_reader (pipe_t **self_p)
                 zmsg_addstr (msg, "DROP READER");
                 zmsg_addstr (msg, self->name);
                 zyre_whisper (self->server->zyre, self->remote, &msg);
+//                 engine_server_log (self, "tell peer we stopped being reader");
             }
             else {
                 engine_send_event (self->writer, reader_dropped_event);
@@ -339,7 +351,6 @@ pipe_drop_local_reader (pipe_t **self_p)
                 *self_p = NULL;
             }
         }
-        else
         pipe_destroy (self_p);
     }
 }
@@ -361,6 +372,7 @@ pipe_drop_local_writer (pipe_t **self_p)
                 zmsg_addstr (msg, "DROP WRITER");
                 zmsg_addstr (msg, self->name);
                 zyre_whisper (self->server->zyre, self->remote, &msg);
+//                 engine_server_log (self, "tell peer we stopped being writer");
             }
             else {
                 engine_send_event (self->reader, writer_dropped_event);
@@ -476,8 +488,10 @@ static void
 open_pipe_writer (client_t *self)
 {
     assert (self->pipe);
-    if (pipe_attach_local_writer (self->pipe, self) == 0)
+    if (pipe_attach_local_writer (self->pipe, self) == 0) {
+        engine_log (self, "open local writer");
         engine_set_next_event (self, ok_event);
+    }
     else
         engine_set_next_event (self, error_event);
 }
@@ -491,8 +505,10 @@ static void
 open_pipe_reader (client_t *self)
 {
     assert (self->pipe);
-    if (pipe_attach_local_reader (self->pipe, self) == 0)
+    if (pipe_attach_local_reader (self->pipe, self) == 0) {
+        engine_log (self, "open local reader");
         engine_set_next_event (self, ok_event);
+    }
     else
         engine_set_next_event (self, error_event);
 }
@@ -506,6 +522,7 @@ static void
 close_pipe_writer (client_t *self)
 {
     pipe_drop_local_writer (&self->pipe);
+    engine_log (self, "close local writer");
 }
 
 
@@ -517,6 +534,7 @@ static void
 close_pipe_reader (client_t *self)
 {
     pipe_drop_local_reader (&self->pipe);
+    engine_log (self, "close local reader");
 }
 
 
@@ -550,6 +568,7 @@ pass_data_to_reader (client_t *self)
 {
     assert (self->pipe);
     zchunk_t *chunk = zpipes_msg_get_chunk (self->request);
+    engine_log (self, "write %d bytes", (int) zchunk_size (chunk));
     pipe_send_data (self->pipe, &chunk);
 }
 
@@ -572,8 +591,8 @@ process_read_request (client_t *self)
         engine_set_next_event (self, pipe_shut_event);
     else
     if (zpipes_msg_timeout (self->request))
-        engine_set_wakeup_event (self,
-                zpipes_msg_timeout (self->request), wakeup_event);
+        engine_set_wakeup_event (
+            self, zpipes_msg_timeout (self->request), wakeup_event);
     //
     //  or else wait until a writer has data for us
 }
@@ -586,6 +605,7 @@ process_read_request (client_t *self)
 static void
 collect_data_to_send (client_t *self)
 {
+    engine_log (self, "read %d bytes", (int) zpipes_msg_size (self->request));
     //  Do we have enough data to satisfy the read request?
     size_t required = zpipes_msg_size (self->request);
     
@@ -628,15 +648,19 @@ collect_data_to_send (client_t *self)
 //  Handle Zyre traffic
 
 static void
-server_process_cluster_command (server_t *self, const char *remote, zmsg_t *msg)
+server_process_cluster_command (
+    server_t *self,
+    const char *remote,
+    zmsg_t *msg,
+    const char *msgmode)
 {
     char *request = zmsg_popstr (msg);
     char *pipename = zmsg_popstr (msg);
     char remote_short [7];
     strncpy (remote_short, remote, 6);
     remote_short [6] = 0;
-    engine_server_log (self, "Remote=%s command=%s pipe=%s",
-                       remote_short, request, pipename);
+    engine_server_log (self, "remote=%s command=%s pipe=%s mode=%s",
+                       remote_short, request, pipename, msgmode);
 
     //  Lookup or create pipe
     //  TODO: remote pipes need cleaning up with some timeout
@@ -654,9 +678,16 @@ server_process_cluster_command (server_t *self, const char *remote, zmsg_t *msg)
         //  TODO encode these commands as proper protocol
         zframe_t *frame = zmsg_pop (msg);
         zchunk_t *chunk = zchunk_new (zframe_data (frame), zframe_size (frame));
+        if (pipe->writer == REMOTE_NODE && pipe->reader) {
+            engine_server_log (self, "send %d bytes to pipe",
+                              (int) zchunk_size (chunk));
+            pipe_send_data (pipe, &chunk); 
+        }
+        else
+            engine_server_log (self, "discard %d bytes, unroutable",
+                              (int) zchunk_size (chunk));
+            
         zframe_destroy (&frame);
-        if (pipe->writer == REMOTE_NODE)
-            pipe_send_data (pipe, &chunk);
         zchunk_destroy (&chunk);
     }
     else
@@ -694,16 +725,14 @@ zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument)
         zlog_info (self->log, "ZPIPES server vanished from %s", remote_short);
     else
     if (streq (command, "SHOUT")) {
-        //  TODO: gentler error handling later; this makes zbroker
-        //  vulnerable to DoS attacks
         char *group = zmsg_popstr (msg);
-        assert (streq (group, "ZPIPES"));
-        server_process_cluster_command (self, remote, msg);
+        if (streq (group, "ZPIPES"))
+            server_process_cluster_command (self, remote, msg, "broadcast");
         zstr_free (&group);
     }
     else
     if (streq (command, "WHISPER"))
-        server_process_cluster_command (self, remote, msg);
+        server_process_cluster_command (self, remote, msg, "unicast");
     
     zstr_free (&command);
     zstr_free (&remote);

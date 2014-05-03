@@ -5,7 +5,7 @@
 static void
 s_wait (char *message)
 {
-    puts (message);
+//     puts (message);
 }
 
 

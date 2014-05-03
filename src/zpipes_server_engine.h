@@ -250,6 +250,7 @@ typedef struct {
     int expiry_timer;           //  zloop timer for client timeouts
     int wakeup_timer;           //  zloop timer for client alarms
     event_t wakeup_event;       //  Wake up with this event
+    char log_prefix [31];       //  Log prefix string
 } s_client_t;
 
 static int
@@ -357,6 +358,18 @@ engine_handle_socket (server_t *server, void *socket, zloop_fn handler)
     }
 }
 
+//  Set log file prefix; this string will be added to log data, to make
+//  log data more searchable. The string is truncated to ~20 chars.
+
+static void
+engine_set_log_prefix (client_t *client, const char *string)
+{
+    if (client) {
+        s_client_t *self = (s_client_t *) client;
+        snprintf (self->log_prefix, sizeof (self->log_prefix) - 1, "%6d:%-20s", self->unique_id, string);
+    }
+}
+
 //  Pedantic compilers don't like unused functions, so we call the whole
 //  API, passing null references. It's nasty and horrid and sufficient.
 
@@ -368,6 +381,7 @@ s_satisfy_pedantic_compilers (void)
     engine_set_wakeup_event (NULL, 0, 0);
     engine_send_event (NULL, 0);
     engine_handle_socket (NULL, 0, NULL);
+    engine_set_log_prefix (NULL, NULL);
 }
 
 
@@ -420,7 +434,8 @@ s_client_new (s_server_t *server, zframe_t *routing_id)
     self->routing_id = zframe_dup (routing_id);
     self->mailbox = zlist_new ();
     self->unique_id = server->client_id++;
-    
+    engine_set_log_prefix (&self->client, "");
+
     self->client.server = (server_t *) server;
     self->client.reply = zpipes_msg_new (0);
     zpipes_msg_set_routing_id (self->client.reply, self->routing_id);
@@ -530,8 +545,8 @@ s_client_execute (s_client_t *self, int event)
         self->next_event = NULL_event;
         self->exception = NULL_event;
         if (self->server->animate) {
-            zclock_log ("%6d: %s:", self->unique_id, s_state_name [self->state]);
-            zclock_log ("%6d:     %s", self->unique_id, s_event_name [self->event]);
+            zclock_log ("%s: %s:", self->log_prefix, s_state_name [self->state]);
+            zclock_log ("%s:     %s", self->log_prefix, s_event_name [self->event]);
         }
         switch (self->state) {
             case start_state:
@@ -539,13 +554,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  lookup or create pipe
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ lookup or create pipe", self->unique_id);
+                            zclock_log ("%s:         $ lookup or create pipe", self->log_prefix);
                         lookup_or_create_pipe (&self->client);
                     }
                     if (!self->exception) {
                         //  open pipe writer
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ open pipe writer", self->unique_id);
+                            zclock_log ("%s:         $ open pipe writer", self->log_prefix);
                         open_pipe_writer (&self->client);
                     }
                     if (!self->exception)
@@ -556,13 +571,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  lookup or create pipe
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ lookup or create pipe", self->unique_id);
+                            zclock_log ("%s:         $ lookup or create pipe", self->log_prefix);
                         lookup_or_create_pipe (&self->client);
                     }
                     if (!self->exception) {
                         //  open pipe reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ open pipe reader", self->unique_id);
+                            zclock_log ("%s:         $ open pipe reader", self->log_prefix);
                         open_pipe_reader (&self->client);
                     }
                     if (!self->exception)
@@ -573,7 +588,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send ping_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send PING_OK", self->unique_id);
+                            zclock_log ("%s:         $ send PING_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_PING_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -594,7 +609,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -603,7 +618,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send invalid
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INVALID", self->unique_id);
+                            zclock_log ("%s:         $ send INVALID", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INVALID);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -612,7 +627,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -623,7 +638,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send output_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send OUTPUT_OK", self->unique_id);
+                            zclock_log ("%s:         $ send OUTPUT_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_OUTPUT_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -637,7 +652,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send output_failed
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send OUTPUT_FAILED", self->unique_id);
+                            zclock_log ("%s:         $ send OUTPUT_FAILED", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_OUTPUT_FAILED);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -646,14 +661,14 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
                 else {
                     //  Handle unexpected internal events
-                    zlog_warning (self->server->log, "%6d: unhandled event %s in %s",
-                        self->unique_id,
+                    zlog_warning (self->server->log, "%s: unhandled event %s in %s",
+                        self->log_prefix,
                         s_event_name [self->event],
                         s_state_name [self->state]);
                     assert (false);
@@ -665,7 +680,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  process write request
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ process write request", self->unique_id);
+                            zclock_log ("%s:         $ process write request", self->log_prefix);
                         process_write_request (&self->client);
                     }
                     if (!self->exception)
@@ -676,7 +691,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send invalid
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INVALID", self->unique_id);
+                            zclock_log ("%s:         $ send INVALID", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INVALID);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -688,13 +703,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe writer
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                            zclock_log ("%s:         $ close pipe writer", self->log_prefix);
                         close_pipe_writer (&self->client);
                     }
                     if (!self->exception) {
                         //  send close_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send CLOSE_OK", self->unique_id);
+                            zclock_log ("%s:         $ send CLOSE_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_CLOSE_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -708,13 +723,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe writer
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                            zclock_log ("%s:         $ close pipe writer", self->log_prefix);
                         close_pipe_writer (&self->client);
                     }
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -723,7 +738,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe writer
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                            zclock_log ("%s:         $ close pipe writer", self->log_prefix);
                         close_pipe_writer (&self->client);
                     }
                 }
@@ -732,7 +747,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send ping_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send PING_OK", self->unique_id);
+                            zclock_log ("%s:         $ send PING_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_PING_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -753,7 +768,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -762,7 +777,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send invalid
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INVALID", self->unique_id);
+                            zclock_log ("%s:         $ send INVALID", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INVALID);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -771,7 +786,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -782,13 +797,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  pass data to reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ pass data to reader", self->unique_id);
+                            zclock_log ("%s:         $ pass data to reader", self->log_prefix);
                         pass_data_to_reader (&self->client);
                     }
                     if (!self->exception) {
                         //  send write_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send WRITE_OK", self->unique_id);
+                            zclock_log ("%s:         $ send WRITE_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_WRITE_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -802,7 +817,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send write_timeout
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send WRITE_TIMEOUT", self->unique_id);
+                            zclock_log ("%s:         $ send WRITE_TIMEOUT", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_WRITE_TIMEOUT);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -816,7 +831,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send write_failed
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send WRITE_FAILED", self->unique_id);
+                            zclock_log ("%s:         $ send WRITE_FAILED", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_WRITE_FAILED);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -825,13 +840,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe writer
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                            zclock_log ("%s:         $ close pipe writer", self->log_prefix);
                         close_pipe_writer (&self->client);
                     }
                     if (!self->exception) {
                         //  send close_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send CLOSE_OK", self->unique_id);
+                            zclock_log ("%s:         $ send CLOSE_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_CLOSE_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -845,13 +860,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe writer
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                            zclock_log ("%s:         $ close pipe writer", self->log_prefix);
                         close_pipe_writer (&self->client);
                     }
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -860,7 +875,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send write_failed
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send WRITE_FAILED", self->unique_id);
+                            zclock_log ("%s:         $ send WRITE_FAILED", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_WRITE_FAILED);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -874,7 +889,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe writer
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe writer", self->unique_id);
+                            zclock_log ("%s:         $ close pipe writer", self->log_prefix);
                         close_pipe_writer (&self->client);
                     }
                 }
@@ -883,7 +898,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send ping_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send PING_OK", self->unique_id);
+                            zclock_log ("%s:         $ send PING_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_PING_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -892,8 +907,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zlog_warning (self->server->log, "%6d: unhandled event %s in %s",
-                        self->unique_id,
+                    zlog_warning (self->server->log, "%s: unhandled event %s in %s",
+                        self->log_prefix,
                         s_event_name [self->event],
                         s_state_name [self->state]);
                     assert (false);
@@ -905,7 +920,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send input_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INPUT_OK", self->unique_id);
+                            zclock_log ("%s:         $ send INPUT_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INPUT_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -919,7 +934,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send input_failed
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INPUT_FAILED", self->unique_id);
+                            zclock_log ("%s:         $ send INPUT_FAILED", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INPUT_FAILED);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -928,14 +943,14 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
                 else {
                     //  Handle unexpected internal events
-                    zlog_warning (self->server->log, "%6d: unhandled event %s in %s",
-                        self->unique_id,
+                    zlog_warning (self->server->log, "%s: unhandled event %s in %s",
+                        self->log_prefix,
                         s_event_name [self->event],
                         s_state_name [self->state]);
                     assert (false);
@@ -947,7 +962,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  process read request
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ process read request", self->unique_id);
+                            zclock_log ("%s:         $ process read request", self->log_prefix);
                         process_read_request (&self->client);
                     }
                     if (!self->exception)
@@ -958,7 +973,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send invalid
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INVALID", self->unique_id);
+                            zclock_log ("%s:         $ send INVALID", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INVALID);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -970,13 +985,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                            zclock_log ("%s:         $ close pipe reader", self->log_prefix);
                         close_pipe_reader (&self->client);
                     }
                     if (!self->exception) {
                         //  send close_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send CLOSE_OK", self->unique_id);
+                            zclock_log ("%s:         $ send CLOSE_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_CLOSE_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -990,13 +1005,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                            zclock_log ("%s:         $ close pipe reader", self->log_prefix);
                         close_pipe_reader (&self->client);
                     }
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -1005,7 +1020,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                            zclock_log ("%s:         $ close pipe reader", self->log_prefix);
                         close_pipe_reader (&self->client);
                     }
                 }
@@ -1014,7 +1029,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send ping_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send PING_OK", self->unique_id);
+                            zclock_log ("%s:         $ send PING_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_PING_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1035,7 +1050,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -1044,7 +1059,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send invalid
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INVALID", self->unique_id);
+                            zclock_log ("%s:         $ send INVALID", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INVALID);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1053,7 +1068,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -1064,13 +1079,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  collect data to send
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ collect data to send", self->unique_id);
+                            zclock_log ("%s:         $ collect data to send", self->log_prefix);
                         collect_data_to_send (&self->client);
                     }
                     if (!self->exception) {
                         //  send read_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send READ_OK", self->unique_id);
+                            zclock_log ("%s:         $ send READ_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1087,7 +1102,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send read_end
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send READ_END", self->unique_id);
+                            zclock_log ("%s:         $ send READ_END", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_END);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1101,7 +1116,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send read_end
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send READ_END", self->unique_id);
+                            zclock_log ("%s:         $ send READ_END", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_END);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1115,7 +1130,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send read_timeout
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send READ_TIMEOUT", self->unique_id);
+                            zclock_log ("%s:         $ send READ_TIMEOUT", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_TIMEOUT);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1129,7 +1144,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send read_failed
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send READ_FAILED", self->unique_id);
+                            zclock_log ("%s:         $ send READ_FAILED", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_FAILED);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1138,13 +1153,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                            zclock_log ("%s:         $ close pipe reader", self->log_prefix);
                         close_pipe_reader (&self->client);
                     }
                     if (!self->exception) {
                         //  send close_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send CLOSE_OK", self->unique_id);
+                            zclock_log ("%s:         $ send CLOSE_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_CLOSE_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1158,13 +1173,13 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                            zclock_log ("%s:         $ close pipe reader", self->log_prefix);
                         close_pipe_reader (&self->client);
                     }
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -1173,19 +1188,19 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  close pipe reader
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ close pipe reader", self->unique_id);
+                            zclock_log ("%s:         $ close pipe reader", self->log_prefix);
                         close_pipe_reader (&self->client);
                     }
                     if (!self->exception) {
                         //  collect data to send
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ collect data to send", self->unique_id);
+                            zclock_log ("%s:         $ collect data to send", self->log_prefix);
                         collect_data_to_send (&self->client);
                     }
                     if (!self->exception) {
                         //  send read_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send READ_OK", self->unique_id);
+                            zclock_log ("%s:         $ send READ_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_READ_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1199,7 +1214,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send ping_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send PING_OK", self->unique_id);
+                            zclock_log ("%s:         $ send PING_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_PING_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1208,8 +1223,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zlog_warning (self->server->log, "%6d: unhandled event %s in %s",
-                        self->unique_id,
+                    zlog_warning (self->server->log, "%s: unhandled event %s in %s",
+                        self->log_prefix,
                         s_event_name [self->event],
                         s_state_name [self->state]);
                     assert (false);
@@ -1221,7 +1236,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send ping_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send PING_OK", self->unique_id);
+                            zclock_log ("%s:         $ send PING_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_PING_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1242,7 +1257,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -1251,7 +1266,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send invalid
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send INVALID", self->unique_id);
+                            zclock_log ("%s:         $ send INVALID", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_INVALID);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1260,7 +1275,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  terminate
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ terminate", self->unique_id);
+                            zclock_log ("%s:         $ terminate", self->log_prefix);
                         self->next_event = terminate_event;
                     }
                 }
@@ -1271,7 +1286,7 @@ s_client_execute (s_client_t *self, int event)
                     if (!self->exception) {
                         //  send ping_ok
                         if (self->server->animate)
-                            zclock_log ("%6d:         $ send PING_OK", self->unique_id);
+                            zclock_log ("%s:         $ send PING_OK", self->log_prefix);
                         zpipes_msg_set_id (self->client.reply, ZPIPES_MSG_PING_OK);
                         zpipes_msg_send (&self->client.reply, self->server->router);
                         self->client.reply = zpipes_msg_new (0);
@@ -1280,8 +1295,8 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else {
                     //  Handle unexpected internal events
-                    zlog_warning (self->server->log, "%6d: unhandled event %s in %s",
-                        self->unique_id,
+                    zlog_warning (self->server->log, "%s: unhandled event %s in %s",
+                        self->log_prefix,
                         s_event_name [self->event],
                         s_state_name [self->state]);
                     assert (false);
@@ -1291,8 +1306,8 @@ s_client_execute (s_client_t *self, int event)
         //  If we had an exception event, interrupt normal programming
         if (self->exception) {
             if (self->server->animate)
-                zclock_log ("%6d:         ! %s",
-                    self->unique_id, s_event_name [self->exception]);
+                zclock_log ("%s:         ! %s",
+                    self->log_prefix, s_event_name [self->exception]);
 
             self->next_event = self->exception;
         }
@@ -1303,8 +1318,8 @@ s_client_execute (s_client_t *self, int event)
         }
         else {
             if (self->server->animate)
-                zclock_log ("%6d:         > %s",
-                    self->unique_id, s_state_name [self->state]);
+                zclock_log ("%s:         > %s",
+                    self->log_prefix, s_state_name [self->state]);
 
             if (self->next_event == NULL_event)
                 //  Get next valid message from mailbox, if any

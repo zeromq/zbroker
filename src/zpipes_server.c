@@ -455,6 +455,9 @@ lookup_or_create_pipe (client_t *self)
     self->pipe = (pipe_t *) zhash_lookup (self->server->pipes, pipename);
     if (!self->pipe)
         self->pipe = pipe_new (self->server, pipename);
+
+    //  Put pipename into logs for this client
+    engine_set_log_prefix (self, pipename);
 }
 
 

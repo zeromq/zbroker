@@ -46,6 +46,7 @@ struct _server_t {
     
     //  These properties are specific for this application
     char *name;                 //  Server public name
+    char uuid [7];              //  Truncated Zyre UUID, 6 chars
     zhash_t *pipes;             //  Collection of pipes
     zyre_t *zyre;               //  Zyre node
 };
@@ -99,7 +100,13 @@ server_initialize (server_t *self)
     zyre_set_interval (self->zyre, 250);
     zyre_start (self->zyre);
     zyre_join (self->zyre, "ZPIPES");
-    zlog_info (self->log, "joining cluster as %s", zyre_uuid (self->zyre));
+
+    //  Get 6-character Zyre UUID for logging
+    strncpy (self->uuid, zyre_uuid (self->zyre), 6);
+    self->uuid [6] = 0;
+    zlog_info (self->log, "joining cluster as %s", self->uuid);
+
+    //  Set-up reader for Zyre events
     engine_handle_socket (self, zyre_socket (self->zyre), zyre_handler);
     return 0;
 }
@@ -625,6 +632,11 @@ server_process_cluster_command (server_t *self, const char *remote, zmsg_t *msg)
 {
     char *request = zmsg_popstr (msg);
     char *pipename = zmsg_popstr (msg);
+    char remote_short [7];
+    strncpy (remote_short, remote, 6);
+    remote_short [6] = 0;
+    engine_server_log (self, "Remote=%s command=%s pipe=%s",
+                       remote_short, request, pipename);
 
     //  Lookup or create pipe
     //  TODO: remote pipes need cleaning up with some timeout
@@ -671,12 +683,15 @@ zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument)
 //     zmsg_dump (msg);
     char *command = zmsg_popstr (msg);
     char *remote = zmsg_popstr (msg);
+    char remote_short [7];
+    strncpy (remote_short, remote, 6);
+    remote_short [6] = 0;
 
     if (streq (command, "ENTER"))
-        zlog_info (self->log, "ZPIPES server appeared at %s", remote);
+        zlog_info (self->log, "ZPIPES server appeared at %s", remote_short);
     else
     if (streq (command, "EXIT"))
-        zlog_info (self->log, "ZPIPES server vanished from %s", remote);
+        zlog_info (self->log, "ZPIPES server vanished from %s", remote_short);
     else
     if (streq (command, "SHOUT")) {
         //  TODO: gentler error handling later; this makes zbroker

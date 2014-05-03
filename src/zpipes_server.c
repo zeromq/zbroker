@@ -726,6 +726,8 @@ zpipes_server_test (bool verbose)
 
     //  Prepare test cases
     zpipes_server_t *self = zpipes_server_new ();
+    zpipes_server_set (self, "server/animate", verbose? "1": "0");
+
     assert (self);
     zpipes_server_bind (self, "ipc://@/zpipes/local");
 

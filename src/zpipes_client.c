@@ -218,6 +218,7 @@ zpipes_client_test (bool verbose)
     printf (" * zpipes_client: ");
     //  @selftest
     zpipes_server_t *server = zpipes_server_new ();
+    zpipes_server_set (server, "server/animate", verbose? "1": "0");
     zpipes_server_bind (server, "ipc://@/zpipes/local");
 
     zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");

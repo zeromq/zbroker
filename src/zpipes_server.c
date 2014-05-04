@@ -241,7 +241,7 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
 //  signal when a local pipe writer arrives.
 
 static int
-pipe_attach_remote_reader (pipe_t *self, const char *remote)
+pipe_attach_remote_reader (pipe_t *self, const char *remote, bool unicast)
 {
     assert (self);
     if (self->reader == NULL) {
@@ -250,9 +250,10 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote)
         self->remote = strdup (remote);
         zclock_log ("%s: attach remote reader", self->name);
 
-        if (self->writer) {
-            //  Tell remote node we're acting as writer
-            //  xxx
+        if (self->writer && !unicast) {
+            //  Tell remote node we're acting as writer, if we got a
+            //  broadcast message. If we got a unicast message, the peer
+            //  already knows about us, so don't re-echo the message
             zmsg_t *msg = zmsg_new ();
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
@@ -287,7 +288,6 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
         else
         if (self->reader == REMOTE_NODE) {
             //  Tell remote node we would like to be writer
-            //  xxx
             zmsg_t *msg = zmsg_new ();
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
@@ -308,7 +308,7 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
 //  signal when a local pipe reader arrives.
 
 static int
-pipe_attach_remote_writer (pipe_t *self, const char *remote)
+pipe_attach_remote_writer (pipe_t *self, const char *remote, bool unicast)
 {
     assert (self);
     if (self->writer == NULL) {
@@ -317,8 +317,10 @@ pipe_attach_remote_writer (pipe_t *self, const char *remote)
         self->remote = strdup (remote);
         zclock_log ("%s: attach remote writer", self->name);
 
-        if (self->reader == NULL) {
-            //  Tell remote node we're acting as reader
+        if (self->reader && !unicast) {
+            //  Tell remote node we're acting as reader, if we got a
+            //  broadcast message. If we got a unicast message, the peer
+            //  already knows about us, so don't re-echo the message
             zmsg_t *msg = zmsg_new ();
             zmsg_addstr (msg, "HAVE READER");
             zmsg_addstr (msg, self->name);
@@ -658,15 +660,15 @@ server_process_cluster_command (
     server_t *self,
     const char *remote,
     zmsg_t *msg,
-    const char *msgmode)
+    bool unicast)
 {
     char *request = zmsg_popstr (msg);
     char *pipename = zmsg_popstr (msg);
     char remote_short [7];
     strncpy (remote_short, remote, 6);
     remote_short [6] = 0;
-    engine_server_log (self, "remote=%s command=%s pipe=%s mode=%s",
-                       remote_short, request, pipename, msgmode);
+    engine_server_log (self, "remote=%s command=%s pipe=%s unicast=%d",
+                       remote_short, request, pipename, unicast);
 
     //  Lookup or create pipe
     //  TODO: remote pipes need cleaning up with some timeout
@@ -675,10 +677,10 @@ server_process_cluster_command (
         pipe = pipe_new (self, pipename);
 
     if (streq (request, "HAVE WRITER"))
-        pipe_attach_remote_writer (pipe, remote);
+        pipe_attach_remote_writer (pipe, remote, unicast);
     else
     if (streq (request, "HAVE READER"))
-        pipe_attach_remote_reader (pipe, remote);
+        pipe_attach_remote_reader (pipe, remote, unicast);
     else
     if (streq (request, "DATA")) {
         //  TODO encode these commands as proper protocol
@@ -733,12 +735,12 @@ zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument)
     if (streq (command, "SHOUT")) {
         char *group = zmsg_popstr (msg);
         if (streq (group, "ZPIPES"))
-            server_process_cluster_command (self, remote, msg, "broadcast");
+            server_process_cluster_command (self, remote, msg, false);
         zstr_free (&group);
     }
     else
     if (streq (command, "WHISPER"))
-        server_process_cluster_command (self, remote, msg, "unicast");
+        server_process_cluster_command (self, remote, msg, true);
     
     zstr_free (&command);
     zstr_free (&remote);

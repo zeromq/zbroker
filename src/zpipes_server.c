@@ -207,6 +207,7 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
 {
     assert (self);
     if (self->reader == NULL) {
+        zclock_log ("%s: attach local reader", self->name);
         self->reader = reader;
         if (self->writer == NULL) {
             //  Announce that we have a new pipe reader so that writers
@@ -215,6 +216,7 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
             zmsg_addstr (msg, "HAVE READER");
             zmsg_addstr (msg, self->name);
             zyre_shout (self->server->zyre, "ZPIPES", &msg);
+            zclock_log ("%s: broadcast we are now reader", self->name);
         }
         else
         if (self->writer == REMOTE_NODE) {
@@ -223,13 +225,14 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
             zmsg_addstr (msg, "HAVE READER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
+            zclock_log ("%s: tell peer we are now reader", self->name);
         }
         else
             engine_send_event (self->writer, have_reader_event);
 
         return 0;
     }
-//     engine_log (self, "pipe already has reader: ignored");
+    zclock_log ("%s: pipe already has reader: ignored", self->name);
     return -1;                  //  Pipe already has reader
 }
 
@@ -245,19 +248,20 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote)
         //  This is how we indicate a remote reader
         self->reader = REMOTE_NODE;
         self->remote = strdup (remote);
-//         engine_server_log (self, "attach remote reader");
+        zclock_log ("%s: attach remote reader", self->name);
 
         if (self->writer) {
             //  Tell remote node we're acting as writer
+            //  xxx
             zmsg_t *msg = zmsg_new ();
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
-//             engine_server_log (self, "tell peer we are now writer");
+            zclock_log ("%s: tell peer we are now writer", self->name);
         }
         return 0;
     }
-//     engine_server_log (self, "pipe already has reader: ignored");
+    zclock_log ("%s: pipe already has reader: ignored", self->name);
     return -1;                  //  Pipe already has reader
 }
 
@@ -269,6 +273,7 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
 {
     assert (self);
     if (self->writer == NULL) {
+        zclock_log ("%s: attach local writer", self->name);
         self->writer = writer;
         if (self->reader == NULL) {
             //  Announce that we have a new pipe writer so that readers
@@ -277,23 +282,24 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_shout (self->server->zyre, "ZPIPES", &msg);
-//             engine_server_log (self, "broadcast we are now writer");
+            zclock_log ("%s: broadcast we are now writer", self->name);
         }
         else
         if (self->reader == REMOTE_NODE) {
             //  Tell remote node we would like to be writer
+            //  xxx
             zmsg_t *msg = zmsg_new ();
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
-//             engine_server_log (self, "tell peer we are now writer");
+            zclock_log ("%s: tell peer we are now writer", self->name);
         }
         else
             engine_send_event (self->reader, have_writer_event);
         
         return 0;
     }
-//     engine_server_log (self, "pipe already has writer: ignored");
+    zclock_log ("%s: pipe already has writer: ignored", self->name);
     return -1;
 }
 
@@ -309,7 +315,7 @@ pipe_attach_remote_writer (pipe_t *self, const char *remote)
         //  This is how we indicate a remote writer
         self->writer = REMOTE_NODE;
         self->remote = strdup (remote);
-//         engine_server_log (self, "attach remote writer");
+        zclock_log ("%s: attach remote writer", self->name);
 
         if (self->reader == NULL) {
             //  Tell remote node we're acting as reader
@@ -317,11 +323,11 @@ pipe_attach_remote_writer (pipe_t *self, const char *remote)
             zmsg_addstr (msg, "HAVE READER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
-//             engine_server_log (self, "tell peer we are now reader");
+            zclock_log ("%s: tell peer we are now reader", self->name);
         }
         return 0;
     }
-//     engine_server_log (self, "pipe already has writer: ignored");
+    zclock_log ("%s: pipe already has writer: ignored", self->name);
     return -1;
 }
 
@@ -343,7 +349,7 @@ pipe_drop_local_reader (pipe_t **self_p)
                 zmsg_addstr (msg, "DROP READER");
                 zmsg_addstr (msg, self->name);
                 zyre_whisper (self->server->zyre, self->remote, &msg);
-//                 engine_server_log (self, "tell peer we stopped being reader");
+                zclock_log ("%s: tell peer we stopped being reader", self->name);
             }
             else {
                 engine_send_event (self->writer, reader_dropped_event);
@@ -372,7 +378,7 @@ pipe_drop_local_writer (pipe_t **self_p)
                 zmsg_addstr (msg, "DROP WRITER");
                 zmsg_addstr (msg, self->name);
                 zyre_whisper (self->server->zyre, self->remote, &msg);
-//                 engine_server_log (self, "tell peer we stopped being writer");
+                zclock_log ("%s: tell peer we stopped being writer", self->name);
             }
             else {
                 engine_send_event (self->reader, writer_dropped_event);

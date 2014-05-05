@@ -2,7 +2,7 @@
     zpipes_client.c - API for zpipes client applications
 
     Copyright (c) the Contributors as noted in the AUTHORS file.
-    This file is part of zbroker, the ZeroMQ broker project.
+    This file is part of zbroker, the ZeroMQ server project.
 
     This Source Code Form is subject to the terms of the Mozilla Public
     License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,14 +17,17 @@
 @end
 */
 
-#include "zbroker_classes.h"
+#include <zmtp.h>
+#include "zchunk.h"
+#include "zpipes_msg.h"
+#include "zpipes_client.h"
+
 
 //  ---------------------------------------------------------------------
 //  Structure of zpipes_client class
 
 struct _zpipes_client_t {
-    zctx_t *ctx;                //  Private CZMQ context
-    void *dealer;               //  Dealer socket to zpipes server
+    zmtp_dealer_t *dealer;      //  Dealer socket to zpipes server
     int error;                  //  Last error cause
 };
 
@@ -59,11 +62,13 @@ zpipes_client_new (const char *server_name, const char *pipe_name)
     assert (self);
     
     //  Create dealer socket and connect to server IPC port
-    self->ctx = zctx_new ();
-    assert (self->ctx);
-    self->dealer = zsocket_new (self->ctx, ZMQ_DEALER);
+    self->dealer = zmtp_dealer_new ();
     assert (self->dealer);
-    int rc = zsocket_connect (self->dealer, "ipc://@/zpipes/%s", server_name);
+
+    char endpoint [256];
+    snprintf (endpoint, 255, "ipc://@/zpipes/%s", server_name);
+    endpoint [255] = 0;
+    int rc = zmtp_dealer_ipc_connect (self->dealer, endpoint);
     assert (rc == 0);
 
     //  Open pipe for reading or writing
@@ -97,7 +102,6 @@ zpipes_client_destroy (zpipes_client_t **self_p)
             zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
             zpipes_msg_destroy (&reply);
         }
-        zctx_destroy (&self->ctx);
         free (self);
         *self_p = NULL;
     }
@@ -217,10 +221,9 @@ zpipes_client_test (bool verbose)
 {
     printf (" * zpipes_client: ");
     //  @selftest
-    zpipes_server_t *server = zpipes_server_new ();
-    zpipes_server_set (server, "server/animate", verbose? "1": "0");
-    zpipes_server_bind (server, "ipc://@/zpipes/local");
-
+    puts ("Please start zbroker and press [Enter]");
+    getchar ();
+    
     zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");
     zpipes_client_t *writer = zpipes_client_new ("local", ">test pipe");
 
@@ -261,8 +264,7 @@ zpipes_client_test (bool verbose)
     assert (zpipes_client_error (reader) == EBADF);
 
     zpipes_client_destroy (&reader);
-    zpipes_server_destroy (&server);
-
+    
     //  @end
     printf ("OK\n");
 }

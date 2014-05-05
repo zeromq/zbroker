@@ -50,3 +50,6 @@ doit*
 *.pc
 zpipes_test_cluster.log
 zpipes_test_cluster.trs
+selftest
+core
+

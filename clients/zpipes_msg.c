@@ -472,8 +472,7 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             assert (false);
     }
     //  Now serialize message into the frame
-    byte *data = (byte *) zmalloc (msg_size);
-    zmtp_msg_t *msg = zmtp_msg_new (0, &data, msg_size);
+    zmtp_msg_t *msg = zmtp_msg_new (0, msg_size);
     self->needle = zmtp_msg_data (msg);
 
     //  Each message frame starts with protocol signature

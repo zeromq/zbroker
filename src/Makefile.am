@@ -17,7 +17,8 @@ libzbroker_la_SOURCES = \
 
 AM_CFLAGS = -g
 AM_CPPFLAGS = -I$(top_srcdir)/include
-bin_PROGRAMS = zbroker zbroker_selftest zpipes_test_cluster
+bin_PROGRAMS = zbroker
+noinst_PROGRAMS = zbroker_selftest zpipes_test_cluster
 
 zbroker_LDADD = libzbroker.la
 zbroker_selftest_LDADD = libzbroker.la

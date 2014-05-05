@@ -1,7 +1,7 @@
-lib_LTLIBRARIES = libzbroker.la libzpipesclient.la
+lib_LTLIBRARIES = libzbroker.la
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = libzbroker.pc libzpipesclient.pc
+pkgconfig_DATA = libzbroker.pc
 
 include_HEADERS = \
 	../include/zbroker.h \
@@ -11,23 +11,19 @@ include_HEADERS = \
 
 libzbroker_la_SOURCES = \
 	zpipes_msg.c \
+	zpipes_client.c \
 	zpipes_server.c \
 	zpipes_server_engine.h
-	
-libzpipesclient_la_SOURCES = \
-	zpipes_client.c
 
 AM_CFLAGS = -g
 AM_CPPFLAGS = -I$(top_srcdir)/include
 bin_PROGRAMS = zbroker zbroker_selftest zpipes_test_cluster
 
-zbroker_selftest_LDADD = libzbroker.la libzpipesclient.la
-zpipes_test_cluster_LDADD = libzbroker.la libzpipesclient.la
-
 zbroker_LDADD = libzbroker.la
+zbroker_selftest_LDADD = libzbroker.la
+zpipes_test_cluster_LDADD = libzbroker.la
 
 libzbroker_la_LDFLAGS = -version-info @LTVER@
-libzpipesclient_la_LDFLAGS = -version-info @CLIENT_LTVER@
 
 TESTS = zbroker_selftest zpipes_test_cluster
 

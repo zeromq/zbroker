@@ -10,7 +10,6 @@
     =========================================================================
 */
 
-
 #include "zbroker_classes.h"
 
 #define PRODUCT         "zbroker service/0.0.1"

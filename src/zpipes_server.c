@@ -18,10 +18,7 @@
 @end
 */
 
-#include <czmq.h>
-#include <zyre.h>
-#include "../include/zpipes_msg.h"
-#include "../include/zpipes_server.h"
+#include "zbroker_classes.h"
 
 //  This method handles all traffic from other server nodes
 

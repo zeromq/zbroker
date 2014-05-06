@@ -10,7 +10,7 @@
     =========================================================================
 */
 
-#include "zbroker.h"
+#include "zbroker_classes.h"
 
 static void
 s_wait (char *message)

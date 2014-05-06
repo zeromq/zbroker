@@ -16,8 +16,7 @@
 
 //  External API
 #include "../include/zbroker.h"
-#include "../include/zpipes_msg.h"
-#include "../include/zpipes_server.h"
-#include "../include/zpipes_client.h"
+
+//  Internal API
 
 #endif

@@ -105,8 +105,10 @@ int main (void)
 
     s_wait ("Open reader reusing pipe name");
     reader = zpipes_client_new ("hosta", "test pipe 2");
+    zpipes_client_destroy (&reader);
 
     zpipes_server_destroy (&hosta);
     zpipes_server_destroy (&hostb);
+    zclock_sleep (100);
     return 0;
 }

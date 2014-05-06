@@ -73,8 +73,7 @@ zpipes_server_destroy (zpipes_server_t **self_p)
         zpipes_server_t *self = *self_p;
         if (!zctx_interrupted) {
             zstr_send (self->pipe, "TERMINATE");
-            char *string = zstr_recv (self->pipe);
-            free (string);
+            zsocket_wait (self->pipe);
         }
         zctx_destroy (&self->ctx);
         free (self);
@@ -91,6 +90,7 @@ zpipes_server_configure (zpipes_server_t *self, const char *config_file)
 {
     zstr_sendm (self->pipe, "CONFIGURE");
     zstr_send (self->pipe, config_file);
+    zsocket_wait (self->pipe);
 }
 
 
@@ -103,6 +103,7 @@ zpipes_server_set (zpipes_server_t *self, const char *path, const char *value)
     zstr_sendm (self->pipe, "SET");
     zstr_sendm (self->pipe, path);
     zstr_send  (self->pipe, value);
+    zsocket_wait (self->pipe);
 }
 
 
@@ -1565,6 +1566,7 @@ s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
         assert (self->port != -1);
         zstr_sendf (self->pipe, "%d", self->port);
         free (endpoint);
+        zsocket_signal (self->pipe);
     }
     else
     if (streq (method, "CONFIGURE")) {
@@ -1581,6 +1583,7 @@ s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
             self->config = zconfig_new ("root", NULL);
         }
         free (config_file);
+        zsocket_signal (self->pipe);
     }
     else
     if (streq (method, "SET")) {
@@ -1590,11 +1593,12 @@ s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
         s_server_config_self (self);
         free (path);
         free (value);
+        zsocket_signal (self->pipe);
     }
     else
     if (streq (method, "TERMINATE")) {
-        zstr_send (self->pipe, "OK");
         self->terminated = true;
+        zsocket_signal (self->pipe);
     }
     else
         zlog_error (self->log, "Invalid API method: %s", method);

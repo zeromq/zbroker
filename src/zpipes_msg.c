@@ -358,55 +358,6 @@ zpipes_msg_decode (zmsg_t **msg_p)
 
 
 //  --------------------------------------------------------------------------
-//  Receive and parse a zpipes_msg from the socket. Returns new object or
-//  NULL if error. Will block if there's no message waiting.
-
-zpipes_msg_t *
-zpipes_msg_recv (void *input)
-{
-    assert (input);
-    zmsg_t *msg = zmsg_recv (input);
-    //  If message came from a router socket, first frame is routing_id
-    zframe_t *routing_id = NULL;
-    if (zsocket_type (input) == ZMQ_ROUTER) {
-        routing_id = zmsg_pop (msg);
-        //  If message was not valid, forget about it
-        if (!routing_id || !zmsg_next (msg))
-            return NULL;        //  Malformed or empty
-    }
-    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (input) == ZMQ_ROUTER)
-        zpipes_msg->routing_id = routing_id;
-        
-    return zpipes_msg;
-}
-
-
-//  --------------------------------------------------------------------------
-//  Receive and parse a zpipes_msg from the socket. Returns new object, 
-//  or NULL either if there was no input waiting, or the recv was interrupted.
-
-zpipes_msg_t *
-zpipes_msg_recv_nowait (void *input)
-{
-    assert (input);
-    zmsg_t *msg = zmsg_recv_nowait (input);
-    //  If message came from a router socket, first frame is routing_id
-    zframe_t *routing_id = NULL;
-    if (zsocket_type (input) == ZMQ_ROUTER) {
-        routing_id = zmsg_pop (msg);
-        //  If message was not valid, forget about it
-        if (!routing_id || !zmsg_next (msg))
-            return NULL;        //  Malformed or empty
-    }
-    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (input) == ZMQ_ROUTER)
-        zpipes_msg->routing_id = routing_id;
-        
-    return zpipes_msg;
-}
-
-
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
 //  object or NULL if error. Use when not in control of sending the message.
 //  If the socket_type is ZMQ_ROUTER, then stores the routing_id as the
@@ -669,6 +620,56 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
     //  Destroy zpipes_msg object
     zpipes_msg_destroy (self_p);
     return msg;
+}
+
+
+//  --------------------------------------------------------------------------
+//  Receive and parse a zpipes_msg from the socket. Returns new object or
+//  NULL if error. Will block if there's no message waiting.
+
+zpipes_msg_t *
+zpipes_msg_recv (void *input)
+{
+    assert (input);
+    zmsg_t *msg = zmsg_recv (input);
+    //  If message came from a router socket, first frame is routing_id
+    zframe_t *routing_id = NULL;
+    if (zsocket_type (input) == ZMQ_ROUTER) {
+        routing_id = zmsg_pop (msg);
+        //  If message was not valid, forget about it
+        if (!routing_id || !zmsg_next (msg))
+            return NULL;        //  Malformed or empty
+    }
+    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
+    if (zsocket_type (input) == ZMQ_ROUTER)
+        zpipes_msg->routing_id = routing_id;
+
+    return zpipes_msg;
+}
+
+
+//  --------------------------------------------------------------------------
+//  Receive and parse a zpipes_msg from the socket. Returns new object,
+//  or NULL either if there was no input waiting, or the recv was interrupted.
+
+zpipes_msg_t *
+zpipes_msg_recv_nowait (void *input)
+{
+    assert (input);
+    zmsg_t *msg = zmsg_recv_nowait (input);
+    //  If message came from a router socket, first frame is routing_id
+    zframe_t *routing_id = NULL;
+    if (zsocket_type (input) == ZMQ_ROUTER) {
+        routing_id = zmsg_pop (msg);
+        //  If message was not valid, forget about it
+        if (!routing_id || !zmsg_next (msg))
+            return NULL;        //  Malformed or empty
+    }
+    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
+    if (zsocket_type (input) == ZMQ_ROUTER)
+        zpipes_msg->routing_id = routing_id;
+
+    return zpipes_msg;
 }
 
 

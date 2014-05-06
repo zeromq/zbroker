@@ -10,7 +10,7 @@
     for commits are:
 
     * The XML model used for this code generation: zpipes_msg.xml
-    * The code generation script that built this file: zproto_codec_c
+    * The code generation script that built this file: codec_libzmtp
     ************************************************************************
     
     Copyright (c) the Contributors as noted in the AUTHORS file.       
@@ -29,13 +29,13 @@
 @end
 */
 
-#include <czmq.h>
-#include "../include/zpipes_msg.h"
+#include <zmtp.h>
+#include "zchunk.h"
+#include "zpipes_msg.h"
 
 //  Structure of our class
 
 struct _zpipes_msg_t {
-    zframe_t *routing_id;               //  Routing_id from ROUTER, if any
     int id;                             //  zpipes_msg message ID
     byte *needle;                       //  Read/write pointer for serialization
     byte *ceiling;                      //  Valid upper limit for read pointer
@@ -205,7 +205,6 @@ zpipes_msg_destroy (zpipes_msg_t **self_p)
         zpipes_msg_t *self = *self_p;
 
         //  Free class properties
-        zframe_destroy (&self->routing_id);
         free (self->pipename);
         free (self->reason);
         zchunk_destroy (&self->chunk);
@@ -218,28 +217,21 @@ zpipes_msg_destroy (zpipes_msg_t **self_p)
 
 
 //  --------------------------------------------------------------------------
-//  Parse a zpipes_msg from zmsg_t. Returns a new object, or NULL if
-//  the message could not be parsed, or was NULL. If the socket type is
-//  ZMQ_ROUTER, then parses the first frame as a routing_id. Destroys msg
-//  and nullifies the msg refernce.
+//  Parse a zpipes_msg from zmtp_msg_t. Returns a new object, or NULL if
+//  the message could not be parsed, or was NULL.
 
 zpipes_msg_t *
-zpipes_msg_decode (zmsg_t **msg_p)
+zpipes_msg_decode (zmtp_msg_t **msg_p)
 {
     assert (msg_p);
-    zmsg_t *msg = *msg_p;
+    zmtp_msg_t *msg = *msg_p;
     if (msg == NULL)
         return NULL;
         
-    zpipes_msg_t *self = zpipes_msg_new (0);
-    //  Read and parse command in frame
-    zframe_t *frame = zmsg_pop (msg);
-    if (!frame) 
-        goto empty;             //  Malformed or empty
-
     //  Get and check protocol signature
-    self->needle = zframe_data (frame);
-    self->ceiling = self->needle + zframe_size (frame);
+    zpipes_msg_t *self = zpipes_msg_new (0);
+    self->needle = zmtp_msg_data (msg);
+    self->ceiling = self->needle + zmtp_msg_size (msg);
     uint16_t signature;
     GET_NUMBER2 (signature);
     if (signature != (0xAAA0 | 0))
@@ -342,43 +334,38 @@ zpipes_msg_decode (zmsg_t **msg_p)
             goto malformed;
     }
     //  Successful return
-    zframe_destroy (&frame);
-    zmsg_destroy (msg_p);
+    zmtp_msg_destroy (msg_p);
     return self;
 
     //  Error returns
     malformed:
         printf ("E: malformed message '%d'\n", self->id);
     empty:
-        zframe_destroy (&frame);
-        zmsg_destroy (msg_p);
+        zmtp_msg_destroy (msg_p);
         zpipes_msg_destroy (&self);
         return (NULL);
 }
 
 
 //  --------------------------------------------------------------------------
-//  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
-//  object or NULL if error. Use when not in control of sending the message.
-//  If the socket_type is ZMQ_ROUTER, then stores the routing_id as the
-//  first frame of the resulting message.
+//  Encode zpipes_msg into a message. Returns a newly created object
+//  or NULL if error. Use when not in control of sending the message.
+//  Destroys the zpipes_msg_t instance.
 
-zmsg_t *
+zmtp_msg_t *
 zpipes_msg_encode (zpipes_msg_t **self_p)
 {
     assert (self_p);
     assert (*self_p);
-    
     zpipes_msg_t *self = *self_p;
-    zmsg_t *msg = zmsg_new ();
 
-    size_t frame_size = 2 + 1;          //  Signature and message ID
+    size_t msg_size = 2 + 1;          //  Signature and message ID
     switch (self->id) {
         case ZPIPES_MSG_INPUT:
             //  pipename is a string with 1-byte length
-            frame_size++;       //  Size is one octet
+            msg_size++;       //  Size is one octet
             if (self->pipename)
-                frame_size += strlen (self->pipename);
+                msg_size += strlen (self->pipename);
             break;
             
         case ZPIPES_MSG_INPUT_OK:
@@ -386,16 +373,16 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             
         case ZPIPES_MSG_INPUT_FAILED:
             //  reason is a string with 1-byte length
-            frame_size++;       //  Size is one octet
+            msg_size++;       //  Size is one octet
             if (self->reason)
-                frame_size += strlen (self->reason);
+                msg_size += strlen (self->reason);
             break;
             
         case ZPIPES_MSG_OUTPUT:
             //  pipename is a string with 1-byte length
-            frame_size++;       //  Size is one octet
+            msg_size++;       //  Size is one octet
             if (self->pipename)
-                frame_size += strlen (self->pipename);
+                msg_size += strlen (self->pipename);
             break;
             
         case ZPIPES_MSG_OUTPUT_OK:
@@ -403,23 +390,23 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             
         case ZPIPES_MSG_OUTPUT_FAILED:
             //  reason is a string with 1-byte length
-            frame_size++;       //  Size is one octet
+            msg_size++;       //  Size is one octet
             if (self->reason)
-                frame_size += strlen (self->reason);
+                msg_size += strlen (self->reason);
             break;
             
         case ZPIPES_MSG_READ:
             //  size is a 4-byte integer
-            frame_size += 4;
+            msg_size += 4;
             //  timeout is a 4-byte integer
-            frame_size += 4;
+            msg_size += 4;
             break;
             
         case ZPIPES_MSG_READ_OK:
             //  chunk is a chunk with 4-byte length
-            frame_size += 4;
+            msg_size += 4;
             if (self->chunk)
-                frame_size += zchunk_size (self->chunk);
+                msg_size += zchunk_size (self->chunk);
             break;
             
         case ZPIPES_MSG_READ_END:
@@ -430,18 +417,18 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             
         case ZPIPES_MSG_READ_FAILED:
             //  reason is a string with 1-byte length
-            frame_size++;       //  Size is one octet
+            msg_size++;       //  Size is one octet
             if (self->reason)
-                frame_size += strlen (self->reason);
+                msg_size += strlen (self->reason);
             break;
             
         case ZPIPES_MSG_WRITE:
             //  chunk is a chunk with 4-byte length
-            frame_size += 4;
+            msg_size += 4;
             if (self->chunk)
-                frame_size += zchunk_size (self->chunk);
+                msg_size += zchunk_size (self->chunk);
             //  timeout is a 4-byte integer
-            frame_size += 4;
+            msg_size += 4;
             break;
             
         case ZPIPES_MSG_WRITE_OK:
@@ -452,9 +439,9 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             
         case ZPIPES_MSG_WRITE_FAILED:
             //  reason is a string with 1-byte length
-            frame_size++;       //  Size is one octet
+            msg_size++;       //  Size is one octet
             if (self->reason)
-                frame_size += strlen (self->reason);
+                msg_size += strlen (self->reason);
             break;
             
         case ZPIPES_MSG_CLOSE:
@@ -465,9 +452,9 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             
         case ZPIPES_MSG_CLOSE_FAILED:
             //  reason is a string with 1-byte length
-            frame_size++;       //  Size is one octet
+            msg_size++;       //  Size is one octet
             if (self->reason)
-                frame_size += strlen (self->reason);
+                msg_size += strlen (self->reason);
             break;
             
         case ZPIPES_MSG_PING:
@@ -485,8 +472,10 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             assert (false);
     }
     //  Now serialize message into the frame
-    zframe_t *frame = zframe_new (NULL, frame_size);
-    self->needle = zframe_data (frame);
+    zmtp_msg_t *msg = zmtp_msg_new (0, msg_size);
+    self->needle = zmtp_msg_data (msg);
+
+    //  Each message frame starts with protocol signature
     PUT_NUMBER2 (0xAAA0 | 0);
     PUT_NUMBER1 (self->id);
 
@@ -611,12 +600,6 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             break;
 
     }
-    //  Now send the data frame
-    if (zmsg_append (msg, &frame)) {
-        zmsg_destroy (&msg);
-        zpipes_msg_destroy (self_p);
-        return NULL;
-    }
     //  Destroy zpipes_msg object
     zpipes_msg_destroy (self_p);
     return msg;
@@ -628,47 +611,12 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
 //  NULL if error. Will block if there's no message waiting.
 
 zpipes_msg_t *
-zpipes_msg_recv (void *input)
+zpipes_msg_recv (zmtp_dealer_t *input)
 {
     assert (input);
-    zmsg_t *msg = zmsg_recv (input);
-    //  If message came from a router socket, first frame is routing_id
-    zframe_t *routing_id = NULL;
-    if (zsocket_type (input) == ZMQ_ROUTER) {
-        routing_id = zmsg_pop (msg);
-        //  If message was not valid, forget about it
-        if (!routing_id || !zmsg_next (msg))
-            return NULL;        //  Malformed or empty
-    }
+    zmtp_msg_t *msg = zmtp_dealer_recv (input);
+    
     zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (input) == ZMQ_ROUTER)
-        zpipes_msg->routing_id = routing_id;
-
-    return zpipes_msg;
-}
-
-
-//  --------------------------------------------------------------------------
-//  Receive and parse a zpipes_msg from the socket. Returns new object,
-//  or NULL either if there was no input waiting, or the recv was interrupted.
-
-zpipes_msg_t *
-zpipes_msg_recv_nowait (void *input)
-{
-    assert (input);
-    zmsg_t *msg = zmsg_recv_nowait (input);
-    //  If message came from a router socket, first frame is routing_id
-    zframe_t *routing_id = NULL;
-    if (zsocket_type (input) == ZMQ_ROUTER) {
-        routing_id = zmsg_pop (msg);
-        //  If message was not valid, forget about it
-        if (!routing_id || !zmsg_next (msg))
-            return NULL;        //  Malformed or empty
-    }
-    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (input) == ZMQ_ROUTER)
-        zpipes_msg->routing_id = routing_id;
-
     return zpipes_msg;
 }
 
@@ -678,313 +626,20 @@ zpipes_msg_recv_nowait (void *input)
 //  Returns 0 if OK, else -1
 
 int
-zpipes_msg_send (zpipes_msg_t **self_p, void *output)
+zpipes_msg_send (zpipes_msg_t **self_p, zmtp_dealer_t *output)
 {
     assert (self_p);
     assert (*self_p);
     assert (output);
 
-    //  Save routing_id if any, as encode will destroy it
-    zpipes_msg_t *self = *self_p;
-    zframe_t *routing_id = self->routing_id;
-    self->routing_id = NULL;
-
-    //  Encode zpipes_msg message to a single zmsg
-    zmsg_t *msg = zpipes_msg_encode (&self);
-    
-    //  If we're sending to a ROUTER, send the routing_id first
-    if (zsocket_type (output) == ZMQ_ROUTER) {
-        assert (routing_id);
-        zmsg_prepend (msg, &routing_id);
-    }
-    else
-        zframe_destroy (&routing_id);
-        
-    if (msg && zmsg_send (&msg, output) == 0)
+    //  Encode zpipes_msg message to a single message
+    zmtp_msg_t *msg = zpipes_msg_encode (self_p);
+    if (msg && zmtp_dealer_send (output, msg) == 0)
         return 0;
-    else
+    else {
+        zmtp_msg_destroy (&msg);
         return -1;              //  Failed to encode, or send
-}
-
-
-//  --------------------------------------------------------------------------
-//  Send the zpipes_msg to the output, and do not destroy it
-
-int
-zpipes_msg_send_again (zpipes_msg_t *self, void *output)
-{
-    assert (self);
-    assert (output);
-    self = zpipes_msg_dup (self);
-    return zpipes_msg_send (&self, output);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode INPUT message
-
-zmsg_t * 
-zpipes_msg_encode_input (
-    const char *pipename)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT);
-    zpipes_msg_set_pipename (self, pipename);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode INPUT_OK message
-
-zmsg_t * 
-zpipes_msg_encode_input_ok (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT_OK);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode INPUT_FAILED message
-
-zmsg_t * 
-zpipes_msg_encode_input_failed (
-    const char *reason)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT_FAILED);
-    zpipes_msg_set_reason (self, reason);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode OUTPUT message
-
-zmsg_t * 
-zpipes_msg_encode_output (
-    const char *pipename)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
-    zpipes_msg_set_pipename (self, pipename);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode OUTPUT_OK message
-
-zmsg_t * 
-zpipes_msg_encode_output_ok (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_OK);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode OUTPUT_FAILED message
-
-zmsg_t * 
-zpipes_msg_encode_output_failed (
-    const char *reason)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_FAILED);
-    zpipes_msg_set_reason (self, reason);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode READ message
-
-zmsg_t * 
-zpipes_msg_encode_read (
-    uint32_t size,
-    uint32_t timeout)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ);
-    zpipes_msg_set_size (self, size);
-    zpipes_msg_set_timeout (self, timeout);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode READ_OK message
-
-zmsg_t * 
-zpipes_msg_encode_read_ok (
-    zchunk_t *chunk)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_OK);
-    zchunk_t *chunk_copy = zchunk_dup (chunk);
-    zpipes_msg_set_chunk (self, &chunk_copy);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode READ_END message
-
-zmsg_t * 
-zpipes_msg_encode_read_end (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_END);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode READ_TIMEOUT message
-
-zmsg_t * 
-zpipes_msg_encode_read_timeout (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_TIMEOUT);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode READ_FAILED message
-
-zmsg_t * 
-zpipes_msg_encode_read_failed (
-    const char *reason)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_FAILED);
-    zpipes_msg_set_reason (self, reason);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode WRITE message
-
-zmsg_t * 
-zpipes_msg_encode_write (
-    zchunk_t *chunk,
-    uint32_t timeout)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE);
-    zchunk_t *chunk_copy = zchunk_dup (chunk);
-    zpipes_msg_set_chunk (self, &chunk_copy);
-    zpipes_msg_set_timeout (self, timeout);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode WRITE_OK message
-
-zmsg_t * 
-zpipes_msg_encode_write_ok (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_OK);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode WRITE_TIMEOUT message
-
-zmsg_t * 
-zpipes_msg_encode_write_timeout (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_TIMEOUT);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode WRITE_FAILED message
-
-zmsg_t * 
-zpipes_msg_encode_write_failed (
-    const char *reason)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_FAILED);
-    zpipes_msg_set_reason (self, reason);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode CLOSE message
-
-zmsg_t * 
-zpipes_msg_encode_close (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode CLOSE_OK message
-
-zmsg_t * 
-zpipes_msg_encode_close_ok (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE_OK);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode CLOSE_FAILED message
-
-zmsg_t * 
-zpipes_msg_encode_close_failed (
-    const char *reason)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE_FAILED);
-    zpipes_msg_set_reason (self, reason);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode PING message
-
-zmsg_t * 
-zpipes_msg_encode_ping (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_PING);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode PING_OK message
-
-zmsg_t * 
-zpipes_msg_encode_ping_ok (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_PING_OK);
-    return zpipes_msg_encode (&self);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Encode INVALID message
-
-zmsg_t * 
-zpipes_msg_encode_invalid (
-)
-{
-    zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INVALID);
-    return zpipes_msg_encode (&self);
+    }
 }
 
 
@@ -993,7 +648,7 @@ zpipes_msg_encode_invalid (
 
 int
 zpipes_msg_send_input (
-    void *output,
+    zmtp_dealer_t *output,
     const char *pipename)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT);
@@ -1007,7 +662,7 @@ zpipes_msg_send_input (
 
 int
 zpipes_msg_send_input_ok (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT_OK);
     return zpipes_msg_send (&self, output);
@@ -1019,7 +674,7 @@ zpipes_msg_send_input_ok (
 
 int
 zpipes_msg_send_input_failed (
-    void *output,
+    zmtp_dealer_t *output,
     const char *reason)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INPUT_FAILED);
@@ -1033,7 +688,7 @@ zpipes_msg_send_input_failed (
 
 int
 zpipes_msg_send_output (
-    void *output,
+    zmtp_dealer_t *output,
     const char *pipename)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
@@ -1047,7 +702,7 @@ zpipes_msg_send_output (
 
 int
 zpipes_msg_send_output_ok (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_OK);
     return zpipes_msg_send (&self, output);
@@ -1059,7 +714,7 @@ zpipes_msg_send_output_ok (
 
 int
 zpipes_msg_send_output_failed (
-    void *output,
+    zmtp_dealer_t *output,
     const char *reason)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_FAILED);
@@ -1073,7 +728,7 @@ zpipes_msg_send_output_failed (
 
 int
 zpipes_msg_send_read (
-    void *output,
+    zmtp_dealer_t *output,
     uint32_t size,
     uint32_t timeout)
 {
@@ -1089,7 +744,7 @@ zpipes_msg_send_read (
 
 int
 zpipes_msg_send_read_ok (
-    void *output,
+    zmtp_dealer_t *output,
     zchunk_t *chunk)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_OK);
@@ -1104,7 +759,7 @@ zpipes_msg_send_read_ok (
 
 int
 zpipes_msg_send_read_end (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_END);
     return zpipes_msg_send (&self, output);
@@ -1116,7 +771,7 @@ zpipes_msg_send_read_end (
 
 int
 zpipes_msg_send_read_timeout (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_TIMEOUT);
     return zpipes_msg_send (&self, output);
@@ -1128,7 +783,7 @@ zpipes_msg_send_read_timeout (
 
 int
 zpipes_msg_send_read_failed (
-    void *output,
+    zmtp_dealer_t *output,
     const char *reason)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_READ_FAILED);
@@ -1142,7 +797,7 @@ zpipes_msg_send_read_failed (
 
 int
 zpipes_msg_send_write (
-    void *output,
+    zmtp_dealer_t *output,
     zchunk_t *chunk,
     uint32_t timeout)
 {
@@ -1159,7 +814,7 @@ zpipes_msg_send_write (
 
 int
 zpipes_msg_send_write_ok (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_OK);
     return zpipes_msg_send (&self, output);
@@ -1171,7 +826,7 @@ zpipes_msg_send_write_ok (
 
 int
 zpipes_msg_send_write_timeout (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_TIMEOUT);
     return zpipes_msg_send (&self, output);
@@ -1183,7 +838,7 @@ zpipes_msg_send_write_timeout (
 
 int
 zpipes_msg_send_write_failed (
-    void *output,
+    zmtp_dealer_t *output,
     const char *reason)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_WRITE_FAILED);
@@ -1197,7 +852,7 @@ zpipes_msg_send_write_failed (
 
 int
 zpipes_msg_send_close (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE);
     return zpipes_msg_send (&self, output);
@@ -1209,7 +864,7 @@ zpipes_msg_send_close (
 
 int
 zpipes_msg_send_close_ok (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE_OK);
     return zpipes_msg_send (&self, output);
@@ -1221,7 +876,7 @@ zpipes_msg_send_close_ok (
 
 int
 zpipes_msg_send_close_failed (
-    void *output,
+    zmtp_dealer_t *output,
     const char *reason)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_CLOSE_FAILED);
@@ -1235,7 +890,7 @@ zpipes_msg_send_close_failed (
 
 int
 zpipes_msg_send_ping (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_PING);
     return zpipes_msg_send (&self, output);
@@ -1247,7 +902,7 @@ zpipes_msg_send_ping (
 
 int
 zpipes_msg_send_ping_ok (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_PING_OK);
     return zpipes_msg_send (&self, output);
@@ -1259,7 +914,7 @@ zpipes_msg_send_ping_ok (
 
 int
 zpipes_msg_send_invalid (
-    void *output)
+    zmtp_dealer_t *output)
 {
     zpipes_msg_t *self = zpipes_msg_new (ZPIPES_MSG_INVALID);
     return zpipes_msg_send (&self, output);
@@ -1276,8 +931,6 @@ zpipes_msg_dup (zpipes_msg_t *self)
         return NULL;
         
     zpipes_msg_t *copy = zpipes_msg_new (self->id);
-    if (self->routing_id)
-        copy->routing_id = zframe_dup (self->routing_id);
     switch (self->id) {
         case ZPIPES_MSG_INPUT:
             copy->pipename = self->pipename? strdup (self->pipename): NULL;
@@ -1357,7 +1010,6 @@ zpipes_msg_dup (zpipes_msg_t *self)
     }
     return copy;
 }
-
 
 
 //  --------------------------------------------------------------------------
@@ -1500,25 +1152,6 @@ zpipes_msg_dump (zpipes_msg_t *self)
 
 
 //  --------------------------------------------------------------------------
-//  Get/set the message routing_id
-
-zframe_t *
-zpipes_msg_routing_id (zpipes_msg_t *self)
-{
-    assert (self);
-    return self->routing_id;
-}
-
-void
-zpipes_msg_set_routing_id (zpipes_msg_t *self, zframe_t *routing_id)
-{
-    if (self->routing_id)
-        zframe_destroy (&self->routing_id);
-    self->routing_id = zframe_dup (routing_id);
-}
-
-
-//  --------------------------------------------------------------------------
 //  Get/set the zpipes_msg id
 
 int
@@ -1624,12 +1257,16 @@ zpipes_msg_set_pipename (zpipes_msg_t *self, const char *format, ...)
 {
     //  Format pipename from provided arguments
     assert (self);
+    char formatted [256];
     va_list argptr;
     va_start (argptr, format);
-    free (self->pipename);
-    self->pipename = zsys_vprintf (format, argptr);
+    snprintf (formatted, 255, format, argptr);
     va_end (argptr);
+    formatted [255] = 0;
+    free (self->pipename);
+    self->pipename = strdup (formatted);
 }
+
 
 
 //  --------------------------------------------------------------------------
@@ -1647,12 +1284,16 @@ zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...)
 {
     //  Format reason from provided arguments
     assert (self);
+    char formatted [256];
     va_list argptr;
     va_start (argptr, format);
-    free (self->reason);
-    self->reason = zsys_vprintf (format, argptr);
+    snprintf (formatted, 255, format, argptr);
     va_end (argptr);
+    formatted [255] = 0;
+    free (self->reason);
+    self->reason = strdup (formatted);
 }
+
 
 
 //  --------------------------------------------------------------------------
@@ -1724,7 +1365,6 @@ zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t **chunk_p)
 }
 
 
-
 //  --------------------------------------------------------------------------
 //  Selftest
 
@@ -1739,20 +1379,7 @@ zpipes_msg_test (bool verbose)
     assert (self);
     zpipes_msg_destroy (&self);
 
-    //  Create pair of sockets we can send through
-    zctx_t *ctx = zctx_new ();
-    assert (ctx);
-
-    void *output = zsocket_new (ctx, ZMQ_DEALER);
-    assert (output);
-    zsocket_bind (output, "inproc://selftest");
-
-    void *input = zsocket_new (ctx, ZMQ_ROUTER);
-    assert (input);
-    zsocket_connect (input, "inproc://selftest");
-    
-    //  Encode/send/decode and verify each message type
-    int instance;
+    //  Encode/decode and verify each message type
     zpipes_msg_t *copy;
     self = zpipes_msg_new (ZPIPES_MSG_INPUT);
     
@@ -1762,18 +1389,9 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&copy);
 
     zpipes_msg_set_pipename (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_pipename (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
+    assert (streq (zpipes_msg_pipename (self), "Life is short but Now lasts for ever"));
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_INPUT_OK);
     
     //  Check that _dup works on empty message
@@ -1781,17 +1399,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_INPUT_FAILED);
     
     //  Check that _dup works on empty message
@@ -1800,18 +1409,9 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&copy);
 
     zpipes_msg_set_reason (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
+    assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_OUTPUT);
     
     //  Check that _dup works on empty message
@@ -1820,18 +1420,9 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&copy);
 
     zpipes_msg_set_pipename (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_pipename (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
+    assert (streq (zpipes_msg_pipename (self), "Life is short but Now lasts for ever"));
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_OK);
     
     //  Check that _dup works on empty message
@@ -1839,17 +1430,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_OUTPUT_FAILED);
     
     //  Check that _dup works on empty message
@@ -1858,18 +1440,9 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&copy);
 
     zpipes_msg_set_reason (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
+    assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_READ);
     
     //  Check that _dup works on empty message
@@ -1879,19 +1452,10 @@ zpipes_msg_test (bool verbose)
 
     zpipes_msg_set_size (self, 123);
     zpipes_msg_set_timeout (self, 123);
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (zpipes_msg_size (self) == 123);
-        assert (zpipes_msg_timeout (self) == 123);
-        zpipes_msg_destroy (&self);
-    }
+    assert (zpipes_msg_size (self) == 123);
+    assert (zpipes_msg_timeout (self) == 123);
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_READ_OK);
     
     //  Check that _dup works on empty message
@@ -1901,18 +1465,9 @@ zpipes_msg_test (bool verbose)
 
     zchunk_t *read_ok_chunk = zchunk_new ("Captcha Diem", 12);
     zpipes_msg_set_chunk (self, &read_ok_chunk);
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (memcmp (zchunk_data (zpipes_msg_chunk (self)), "Captcha Diem", 12) == 0);
-        zpipes_msg_destroy (&self);
-    }
+    assert (memcmp (zchunk_data (zpipes_msg_chunk (self)), "Captcha Diem", 12) == 0);
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_READ_END);
     
     //  Check that _dup works on empty message
@@ -1920,17 +1475,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_READ_TIMEOUT);
     
     //  Check that _dup works on empty message
@@ -1938,17 +1484,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_READ_FAILED);
     
     //  Check that _dup works on empty message
@@ -1957,18 +1494,9 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&copy);
 
     zpipes_msg_set_reason (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
+    assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_WRITE);
     
     //  Check that _dup works on empty message
@@ -1979,19 +1507,10 @@ zpipes_msg_test (bool verbose)
     zchunk_t *write_chunk = zchunk_new ("Captcha Diem", 12);
     zpipes_msg_set_chunk (self, &write_chunk);
     zpipes_msg_set_timeout (self, 123);
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (memcmp (zchunk_data (zpipes_msg_chunk (self)), "Captcha Diem", 12) == 0);
-        assert (zpipes_msg_timeout (self) == 123);
-        zpipes_msg_destroy (&self);
-    }
+    assert (memcmp (zchunk_data (zpipes_msg_chunk (self)), "Captcha Diem", 12) == 0);
+    assert (zpipes_msg_timeout (self) == 123);
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_WRITE_OK);
     
     //  Check that _dup works on empty message
@@ -1999,17 +1518,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_WRITE_TIMEOUT);
     
     //  Check that _dup works on empty message
@@ -2017,17 +1527,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_WRITE_FAILED);
     
     //  Check that _dup works on empty message
@@ -2036,18 +1537,9 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&copy);
 
     zpipes_msg_set_reason (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
+    assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_CLOSE);
     
     //  Check that _dup works on empty message
@@ -2055,17 +1547,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_CLOSE_OK);
     
     //  Check that _dup works on empty message
@@ -2073,17 +1556,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_CLOSE_FAILED);
     
     //  Check that _dup works on empty message
@@ -2092,18 +1566,9 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&copy);
 
     zpipes_msg_set_reason (self, "Life is short but Now lasts for ever");
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
-        zpipes_msg_destroy (&self);
-    }
+    assert (streq (zpipes_msg_reason (self), "Life is short but Now lasts for ever"));
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_PING);
     
     //  Check that _dup works on empty message
@@ -2111,17 +1576,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_PING_OK);
     
     //  Check that _dup works on empty message
@@ -2129,17 +1585,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
+    zpipes_msg_destroy (&self);
     self = zpipes_msg_new (ZPIPES_MSG_INVALID);
     
     //  Check that _dup works on empty message
@@ -2147,19 +1594,8 @@ zpipes_msg_test (bool verbose)
     assert (copy);
     zpipes_msg_destroy (&copy);
 
-    //  Send twice from same object
-    zpipes_msg_send_again (self, output);
-    zpipes_msg_send (&self, output);
 
-    for (instance = 0; instance < 2; instance++) {
-        self = zpipes_msg_recv (input);
-        assert (self);
-        assert (zpipes_msg_routing_id (self));
-        
-        zpipes_msg_destroy (&self);
-    }
-
-    zctx_destroy (&ctx);
+    zpipes_msg_destroy (&self);
     //  @end
 
     printf ("OK\n");

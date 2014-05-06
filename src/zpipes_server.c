@@ -18,10 +18,7 @@
 @end
 */
 
-#include <czmq.h>
-#include <zyre.h>
-#include "../include/zpipes_msg.h"
-#include "../include/zpipes_server.h"
+#include "zbroker_classes.h"
 
 //  This method handles all traffic from other server nodes
 
@@ -260,6 +257,10 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote, bool unicast)
             zyre_whisper (self->server->zyre, self->remote, &msg);
             zclock_log ("%s: tell peer we are now writer", self->name);
         }
+        //  Writer must be local at this stage; wake it up so it can
+        //  ship off its waiting data
+        assert (self->writer != REMOTE_NODE);
+        engine_send_event (self->writer, have_reader_event);
         return 0;
     }
     zclock_log ("%s: pipe already has reader: ignored", self->name);

@@ -1,6 +1,16 @@
-//  Test zpipes over a cluster
+/*  =========================================================================
+    zpipes_test_cluster - test zpipes over a cluster
 
-#include "zbroker.h"
+    Copyright (c) the Contributors as noted in the AUTHORS file.
+    This file is part of zbroker, the ZeroMQ broker project.
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+    =========================================================================
+*/
+
+#include "zbroker_classes.h"
 
 static void
 s_wait (char *message)
@@ -95,8 +105,10 @@ int main (void)
 
     s_wait ("Open reader reusing pipe name");
     reader = zpipes_client_new ("hosta", "test pipe 2");
+    zpipes_client_destroy (&reader);
 
     zpipes_server_destroy (&hosta);
     zpipes_server_destroy (&hostb);
+    zclock_sleep (100);
     return 0;
 }

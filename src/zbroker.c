@@ -42,13 +42,6 @@ int main (int argc, char *argv [])
     zclock_log ("I: starting zpipes broker using config in '%s'", config_file);
     zconfig_t *config = zconfig_load (config_file);
     if (config) {
-        //  Switch to user/group to run process under, if any
-        if (s_zsys_run_as (
-            zconfig_resolve (config, "server/lockfile", NULL),
-            zconfig_resolve (config, "server/group", NULL),
-            zconfig_resolve (config, "server/user", NULL)))
-            return -1;
-
         //  Do we want to run broker in the background?
         int as_daemon = atoi (zconfig_resolve (config, "server/background", "0"));
         const char *workdir = zconfig_resolve (config, "server/workdir", ".");
@@ -57,6 +50,13 @@ int main (int argc, char *argv [])
             if (zsys_daemonize (workdir))
                 return -1;
         }
+        //  Switch to user/group to run process under, if any
+        if (s_zsys_run_as (
+            zconfig_resolve (config, "server/lockfile", NULL),
+            zconfig_resolve (config, "server/group", NULL),
+            zconfig_resolve (config, "server/user", NULL)))
+            return -1;
+
         zconfig_destroy (&config);
     }
     else {

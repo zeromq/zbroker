@@ -134,107 +134,107 @@ zmtp_msg_t *
 
 //  Receive and parse a zpipes_msg from the socket. Returns new object,
 //  or NULL if error. Will block if there's no message waiting.
-CZMQ_EXPORT zpipes_msg_t *
+zpipes_msg_t *
     zpipes_msg_recv (zmtp_dealer_t *input);
 
 //  Send the zpipes_msg to the output, and destroy it
-CZMQ_EXPORT int
+int
     zpipes_msg_send (zpipes_msg_t **self_p, zmtp_dealer_t *output);
 
 //  Send the INPUT to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_input (zmtp_dealer_t *output,
         const char *pipename);
 
 //  Send the INPUT_OK to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_input_ok (zmtp_dealer_t *output);
 
 //  Send the INPUT_FAILED to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_input_failed (zmtp_dealer_t *output,
         const char *reason);
 
 //  Send the OUTPUT to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_output (zmtp_dealer_t *output,
         const char *pipename);
 
 //  Send the OUTPUT_OK to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_output_ok (zmtp_dealer_t *output);
 
 //  Send the OUTPUT_FAILED to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_output_failed (zmtp_dealer_t *output,
         const char *reason);
 
 //  Send the READ to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read (zmtp_dealer_t *output,
         uint32_t size,
         uint32_t timeout);
 
 //  Send the READ_OK to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_ok (zmtp_dealer_t *output,
         zchunk_t *chunk);
 
 //  Send the READ_END to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_end (zmtp_dealer_t *output);
 
 //  Send the READ_TIMEOUT to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_timeout (zmtp_dealer_t *output);
 
 //  Send the READ_FAILED to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_failed (zmtp_dealer_t *output,
         const char *reason);
 
 //  Send the WRITE to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write (zmtp_dealer_t *output,
         zchunk_t *chunk,
         uint32_t timeout);
 
 //  Send the WRITE_OK to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write_ok (zmtp_dealer_t *output);
 
 //  Send the WRITE_TIMEOUT to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write_timeout (zmtp_dealer_t *output);
 
 //  Send the WRITE_FAILED to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write_failed (zmtp_dealer_t *output,
         const char *reason);
 
 //  Send the CLOSE to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_close (zmtp_dealer_t *output);
 
 //  Send the CLOSE_OK to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_close_ok (zmtp_dealer_t *output);
 
 //  Send the CLOSE_FAILED to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_close_failed (zmtp_dealer_t *output,
         const char *reason);
 
 //  Send the PING to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_ping (zmtp_dealer_t *output);
 
 //  Send the PING_OK to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_ping_ok (zmtp_dealer_t *output);
 
 //  Send the INVALID to the output in one step
-CZMQ_EXPORT int
+int
     zpipes_msg_send_invalid (zmtp_dealer_t *output);
 
 //  Duplicate the zpipes_msg message

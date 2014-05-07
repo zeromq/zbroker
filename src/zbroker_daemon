@@ -1,0 +1,14 @@
+MAIN=zbroker
+
+sudo rm $MAIN
+gcc -g -o $MAIN \
+    $MAIN.c \
+    zpipes_msg.c zpipes_client.c zpipes_server.c \
+    -lczmq -lzmq -lzyre -luuid -lsodium
+test $? -ne 0 && exit
+
+sudo chown root $MAIN
+sudo chgrp root $MAIN
+sudo chmod +s $MAIN
+
+./$MAIN zbroker-daemon.cfg

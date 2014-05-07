@@ -90,16 +90,16 @@ zmtp_msg_t *
 
 //  Receive and parse a $(class.name) from the socket. Returns new object,
 //  or NULL if error. Will block if there's no message waiting.
-CZMQ_EXPORT $(class.name)_t *
+$(class.name)_t *
     $(class.name)_recv (zmtp_dealer_t *input);
 
 //  Send the $(class.name) to the output, and destroy it
-CZMQ_EXPORT int
+int
     $(class.name)_send ($(class.name)_t **self_p, zmtp_dealer_t *output);
 
 .for message
 //  Send the $(message.NAME) to the output in one step
-CZMQ_EXPORT int
+int
     $(class.name)_send_$(name) (zmtp_dealer_t *output\
 .for field where !defined (value)
 .   if defined (message.has_msg)

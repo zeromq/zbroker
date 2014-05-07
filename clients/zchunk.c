@@ -1,6 +1,8 @@
 /*  =========================================================================
     zchunk - work with memory chunks
 
+    This file is part of zbroker, the ZeroMQ broker project.
+
     Copyright (c) the Contributors as noted in the AUTHORS file.
     This file is part of CZMQ, the high-level C binding for 0MQ:
     http://czmq.zeromq.org.

@@ -52,4 +52,7 @@ zpipes_test_cluster.log
 zpipes_test_cluster.trs
 selftest
 core
+clients/zpipes_test_client
+clients/zpipes_selftest
+
 

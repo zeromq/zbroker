@@ -21,16 +21,16 @@ typedef struct _zpipes_client_t zpipes_client_t;
 
 // @interface
 //  Constructor; open ">pipename" for writing, "pipename" for reading
-CZMQ_EXPORT zpipes_client_t *
+zpipes_client_t *
     zpipes_client_new (const char *broker_name, const char *pipe_name);
 
 //  Destructor; closes pipe
-CZMQ_EXPORT void
+void
     zpipes_client_destroy (zpipes_client_t **self_p);
 
 //  Write chunk of data to pipe; returns number of bytes written, or -1
 //  in case of error, and then sets zpipes_client_error() to EBADF.
-CZMQ_EXPORT ssize_t
+ssize_t
     zpipes_client_write (zpipes_client_t *self,
                          void *data, size_t size, int timeout);
 
@@ -39,16 +39,16 @@ CZMQ_EXPORT ssize_t
 //  pipe was closed by the writer, and no more data is available. On a
 //  timeout or interrupt, returns -1. To get the actual error code, call
 //  zpipes_client_error(), which will be EINTR, EAGAIN, or EBADF.
-CZMQ_EXPORT ssize_t
+ssize_t
     zpipes_client_read (zpipes_client_t *self,
                         void *data, size_t max_size, int timeout);
 
 //  Returns last error number, if any
-CZMQ_EXPORT int
+int
     zpipes_client_error (zpipes_client_t *self);
 
 // Self test of this class
-CZMQ_EXPORT void
+void
     zpipes_client_test (bool verbose);
 // @end
 

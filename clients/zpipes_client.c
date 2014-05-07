@@ -64,9 +64,12 @@ zpipes_client_new (const char *server_name, const char *pipe_name)
     //  Create dealer socket and connect to server IPC port
     self->dealer = zmtp_dealer_new ();
     assert (self->dealer);
-
+    
+    //  libzmtp does not yet support abstract IPC endpoints
+    //  so for now we need to use this style, also in zbroker.cfg
+    //  See https://github.com/zeromq/libzmtp/issues/31
     char endpoint [256];
-    snprintf (endpoint, 255, "ipc://@/zpipes/%s", server_name);
+    snprintf (endpoint, 255, "/tmp/zpipes-%s", server_name);
     endpoint [255] = 0;
     int rc = zmtp_dealer_ipc_connect (self->dealer, endpoint);
     assert (rc == 0);
@@ -221,50 +224,8 @@ zpipes_client_test (bool verbose)
 {
     printf (" * zpipes_client: ");
     //  @selftest
-    puts ("Please start zbroker and press [Enter]");
-    getchar ();
-    
-    zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");
-    zpipes_client_t *writer = zpipes_client_new ("local", ">test pipe");
-
-    byte buffer [100];
-    ssize_t bytes;
-
-    //  Expect timeout error, EAGAIN
-    bytes = zpipes_client_read (reader, buffer, 6, 100);
-    assert (bytes == -1);
-    assert (zpipes_client_error (reader) == EAGAIN);
-
-    bytes = zpipes_client_write (writer, "CHUNK1", 6, 100);
-    assert (bytes == 6);
-    bytes = zpipes_client_write (writer, "CHUNK2", 6, 100);
-    assert (bytes == 6);
-    bytes = zpipes_client_write (writer, "CHUNK3", 6, 100);
-    assert (bytes == 6);
-
-    bytes = zpipes_client_read (reader, buffer, 1, 100);
-    assert (bytes == 1);
-    bytes = zpipes_client_read (reader, buffer, 10, 100);
-    assert (bytes == 10);
-
-    //  Now close writer
-    zpipes_client_destroy (&writer);
-
-    //  Expect end of pipe (short read)
-    bytes = zpipes_client_read (reader, buffer, 50, 100);
-    assert (bytes == 7);
-    
-    //  Expect end of pipe (empty chunk)
-    bytes = zpipes_client_read (reader, buffer, 50, 100);
-    assert (bytes == 0);
-
-    //  Expect illegal action (EBADF) writing on reader
-    bytes = zpipes_client_write (reader, "CHUNK1", 6, 100);
-    assert (bytes == -1);
-    assert (zpipes_client_error (reader) == EBADF);
-
-    zpipes_client_destroy (&reader);
-    
+    //  Cannot do a selftest here as we can't start the broker from
+    //  inside this library... see stand-alone zpipes_test_client.c.
     //  @end
     printf ("OK\n");
 }

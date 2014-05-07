@@ -634,14 +634,14 @@ zpipes_msg_recv (void *input)
     zmsg_t *msg = zmsg_recv (input);
     //  If message came from a router socket, first frame is routing_id
     zframe_t *routing_id = NULL;
-    if (zsocket_type (input) == ZMQ_ROUTER) {
+    if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER) {
         routing_id = zmsg_pop (msg);
         //  If message was not valid, forget about it
         if (!routing_id || !zmsg_next (msg))
             return NULL;        //  Malformed or empty
     }
     zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (input) == ZMQ_ROUTER)
+    if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
         zpipes_msg->routing_id = routing_id;
 
     return zpipes_msg;
@@ -659,14 +659,14 @@ zpipes_msg_recv_nowait (void *input)
     zmsg_t *msg = zmsg_recv_nowait (input);
     //  If message came from a router socket, first frame is routing_id
     zframe_t *routing_id = NULL;
-    if (zsocket_type (input) == ZMQ_ROUTER) {
+    if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER) {
         routing_id = zmsg_pop (msg);
         //  If message was not valid, forget about it
         if (!routing_id || !zmsg_next (msg))
             return NULL;        //  Malformed or empty
     }
     zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (input) == ZMQ_ROUTER)
+    if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
         zpipes_msg->routing_id = routing_id;
 
     return zpipes_msg;
@@ -693,7 +693,7 @@ zpipes_msg_send (zpipes_msg_t **self_p, void *output)
     zmsg_t *msg = zpipes_msg_encode (&self);
     
     //  If we're sending to a ROUTER, send the routing_id first
-    if (zsocket_type (output) == ZMQ_ROUTER) {
+    if (zsocket_type (zsock_resolve (output)) == ZMQ_ROUTER) {
         assert (routing_id);
         zmsg_prepend (msg, &routing_id);
     }
@@ -1740,17 +1740,14 @@ zpipes_msg_test (bool verbose)
     zpipes_msg_destroy (&self);
 
     //  Create pair of sockets we can send through
-    zctx_t *ctx = zctx_new ();
-    assert (ctx);
-
-    void *output = zsocket_new (ctx, ZMQ_DEALER);
-    assert (output);
-    zsocket_bind (output, "inproc://selftest");
-
-    void *input = zsocket_new (ctx, ZMQ_ROUTER);
+    zsock_t *input = zsock_new (ZMQ_ROUTER);
     assert (input);
-    zsocket_connect (input, "inproc://selftest");
-    
+    zsock_connect (input, "inproc://selftest");
+
+    zsock_t *output = zsock_new (ZMQ_DEALER);
+    assert (output);
+    zsock_bind (output, "inproc://selftest");
+
     //  Encode/send/decode and verify each message type
     int instance;
     zpipes_msg_t *copy;
@@ -2159,7 +2156,8 @@ zpipes_msg_test (bool verbose)
         zpipes_msg_destroy (&self);
     }
 
-    zctx_destroy (&ctx);
+    zsock_destroy (&input);
+    zsock_destroy (&output);
     //  @end
 
     printf ("OK\n");

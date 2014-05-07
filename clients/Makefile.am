@@ -15,15 +15,15 @@ libzbroker_cli_la_SOURCES = \
 
 AM_CFLAGS = -g
 AM_CPPFLAGS = 
-noinst_PROGRAMS = selftest
+noinst_PROGRAMS = zpipes_selftest
 
-selftest_SOURCES = selftest.c
-selftest_LDADD = libzbroker_cli.la -lzmtp
+zpipes_selftest_SOURCES = zpipes_selftest.c
+zpipes_selftest_LDADD = libzbroker_cli.la -lzmtp
 
 libzbroker_cli_la_LDFLAGS = -version-info @LTVER@
 
 # Selftest isn't working yet
-# TESTS = selftest
+# TESTS = zpipes_selftest
 
 # Produce generated models; do this manually in src directory
 code:

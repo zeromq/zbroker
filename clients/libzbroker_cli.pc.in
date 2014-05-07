@@ -3,9 +3,9 @@ exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
 
-Name: libzbroker
+Name: libzbroker_cli
 Description: ZeroMQ broker project
 Version: @VERSION@
-Requires: libzmq libczmq libzyre
-Libs: -L${libdir} -lzbroker
+Requires: libzmtp
+Libs: -L${libdir} -lzbroker_cli
 Cflags: -I${includedir}

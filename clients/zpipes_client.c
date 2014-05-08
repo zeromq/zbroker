@@ -69,7 +69,7 @@ zpipes_client_new (const char *server_name, const char *pipe_name)
     //  so for now we need to use this style, also in zbroker.cfg
     //  See https://github.com/zeromq/libzmtp/issues/31
     char endpoint [256];
-    snprintf (endpoint, 255, "/tmp/zpipes-%s", server_name);
+    snprintf (endpoint, 255, "@/zpipes/%s", server_name);
     endpoint [255] = 0;
     int rc = zmtp_dealer_ipc_connect (self->dealer, endpoint);
     assert (rc == 0);

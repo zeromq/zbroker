@@ -362,7 +362,7 @@ CZMQ_EXPORT zpipes_msg_t *
 
 //  Print contents of message to stdout
 CZMQ_EXPORT void
-    zpipes_msg_dump (zpipes_msg_t *self);
+    zpipes_msg_print (zpipes_msg_t *self);
 
 //  Get/set the message routing id
 CZMQ_EXPORT zframe_t *

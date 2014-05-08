@@ -1364,7 +1364,7 @@ zpipes_msg_dup (zpipes_msg_t *self)
 //  Print contents of message to stdout
 
 void
-zpipes_msg_dump (zpipes_msg_t *self)
+zpipes_msg_print (zpipes_msg_t *self)
 {
     assert (self);
     switch (self->id) {

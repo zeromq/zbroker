@@ -535,25 +535,36 @@ s_client_filter_mailbox (s_client_t *self)
         //  Check whether current state can process event
         //  This should be changed to a pre-built lookup table
         event_t event = s_protocol_event (request);
-        bool event_is_valid = false;
+        bool event_is_valid;
         if (self->state == start_state)
             event_is_valid = true;
+        else
         if (self->state == writing_state)
             event_is_valid = true;
+        else
         if (self->state == processing_write_state && event == close_event)
             event_is_valid = true;
+        else
         if (self->state == processing_write_state && event == ping_event)
             event_is_valid = true;
+        else
         if (self->state == reading_state)
             event_is_valid = true;
+        else
         if (self->state == processing_read_state && event == close_event)
             event_is_valid = true;
+        else
         if (self->state == processing_read_state && event == ping_event)
             event_is_valid = true;
+        else
         if (self->state == external_state)
             event_is_valid = true;
+        else
         if (self->state == internal_state && event == ping_event)
             event_is_valid = true;
+        else
+            event_is_valid = false;
+            
         if (event_is_valid) {
             zlist_remove (self->mailbox, request);
             zpipes_msg_destroy (&self->client.request);

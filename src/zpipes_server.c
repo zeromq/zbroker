@@ -95,6 +95,7 @@ server_initialize (server_t *self)
     self->zyre = zyre_new (self->ctx);
     //  Set rapid cluster discovery; this is tuned for wired LAN not WiFi
     zyre_set_interval (self->zyre, 250);
+//     zyre_set_verbose (self->zyre);
     zyre_start (self->zyre);
     zyre_join (self->zyre, "ZPIPES");
 

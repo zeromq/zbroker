@@ -99,11 +99,13 @@ zpipes_client_destroy (zpipes_client_t **self_p)
     if (*self_p) {
         zpipes_client_t *self = *self_p;
         if (self->dealer) {
+            //  Send CLOSE to the server to drop any pipes the client
+            //  might have been using. We ignore the reply, which may
+            //  be ok, error, or null (if the process was interrupted).
             zpipes_msg_send_close (self->dealer);
-            //  Get reply, ignore it: could be ok or an error depending
-            //  on what the client did before.
             zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
             zpipes_msg_destroy (&reply);
+            zmtp_dealer_destroy (&self->dealer);
         }
         free (self);
         *self_p = NULL;

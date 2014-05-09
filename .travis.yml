@@ -8,7 +8,6 @@ before_script:
 - git clone git://github.com/zeromq/zeromq4-x.git
 - git clone git://github.com/zeromq/czmq.git
 - git clone git://github.com/zeromq/zyre.git
-- cd zyre && git checkout v1.0.0 && cd ..
 - git clone git://github.com/zeromq/libzmtp.git
 - for project in libsodium zeromq4-x czmq zyre libzmtp; do
 -     cd $project

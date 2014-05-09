@@ -1,0 +1,11 @@
+MAIN=zpipes_test_client
+VG="valgrind --tool=memcheck --leak-check=full --show-reachable=yes --suppressions=valgrind.supp"
+
+make code
+gcc -g -o $MAIN \
+    $MAIN.c \
+    zpipes_msg.c zpipes_client.c zchunk.c \
+    -lzmtp
+test $? -ne 0 && exit
+$VG ./$MAIN
+rm -f vgcore.*

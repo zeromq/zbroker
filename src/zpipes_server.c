@@ -95,6 +95,7 @@ server_initialize (server_t *self)
     self->zyre = zyre_new (self->ctx);
     //  Set rapid cluster discovery; this is tuned for wired LAN not WiFi
     zyre_set_interval (self->zyre, 250);
+//     zyre_set_verbose (self->zyre);
     zyre_start (self->zyre);
     zyre_join (self->zyre, "ZPIPES");
 
@@ -241,6 +242,13 @@ static int
 pipe_attach_remote_reader (pipe_t *self, const char *remote, bool unicast)
 {
     assert (self);
+    if (self->writer == REMOTE_NODE) {
+        //  We're witnessing two nodes chatting, so we can drop the pipe
+        //  and forget all about it
+        pipe_destroy (&self);
+        return 0;
+    }
+    else
     if (self->reader == NULL) {
         //  This is how we indicate a remote reader
         self->reader = REMOTE_NODE;
@@ -259,7 +267,6 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote, bool unicast)
         }
         //  Writer must be local at this stage; wake it up so it can
         //  ship off its waiting data
-        assert (self->writer != REMOTE_NODE);
         engine_send_event (self->writer, have_reader_event);
         return 0;
     }
@@ -312,6 +319,13 @@ static int
 pipe_attach_remote_writer (pipe_t *self, const char *remote, bool unicast)
 {
     assert (self);
+    if (self->reader == REMOTE_NODE) {
+        //  We're witnessing two nodes chatting, so we can drop the pipe
+        //  and forget all about it
+        pipe_destroy (&self);
+        return 0;
+    }
+    else
     if (self->writer == NULL) {
         //  This is how we indicate a remote writer
         self->writer = REMOTE_NODE;

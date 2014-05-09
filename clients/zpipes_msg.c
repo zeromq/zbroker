@@ -634,12 +634,12 @@ zpipes_msg_send (zpipes_msg_t **self_p, zmtp_dealer_t *output)
 
     //  Encode zpipes_msg message to a single message
     zmtp_msg_t *msg = zpipes_msg_encode (self_p);
-    if (msg && zmtp_dealer_send (output, msg) == 0)
-        return 0;
-    else {
-        zmtp_msg_destroy (&msg);
-        return -1;              //  Failed to encode, or send
-    }
+    int rc = -1;
+    if (msg)
+        rc = zmtp_dealer_send (output, msg);
+
+    zmtp_msg_destroy (&msg);
+    return rc;
 }
 
 

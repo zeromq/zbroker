@@ -106,6 +106,7 @@ server_initialize (server_t *self)
 
     //  Set-up reader for Zyre events
     engine_handle_socket (self, zyre_socket (self->zyre), zyre_handler);
+    
     return 0;
 }
 

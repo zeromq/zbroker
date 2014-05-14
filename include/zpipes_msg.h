@@ -261,98 +261,119 @@ CZMQ_EXPORT zmsg_t *
 
 
 //  Send the INPUT to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_input (void *output,
         const char *pipename);
     
 //  Send the INPUT_OK to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_input_ok (void *output);
     
 //  Send the INPUT_FAILED to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_input_failed (void *output,
         const char *reason);
     
 //  Send the OUTPUT to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_output (void *output,
         const char *pipename);
     
 //  Send the OUTPUT_OK to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_output_ok (void *output);
     
 //  Send the OUTPUT_FAILED to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_output_failed (void *output,
         const char *reason);
     
 //  Send the READ to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_read (void *output,
         uint32_t size,
         uint32_t timeout);
     
 //  Send the READ_OK to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_read_ok (void *output,
         zchunk_t *chunk);
     
 //  Send the READ_END to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_read_end (void *output);
     
 //  Send the READ_TIMEOUT to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_read_timeout (void *output);
     
 //  Send the READ_FAILED to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_read_failed (void *output,
         const char *reason);
     
 //  Send the WRITE to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_write (void *output,
         zchunk_t *chunk,
         uint32_t timeout);
     
 //  Send the WRITE_OK to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_write_ok (void *output);
     
 //  Send the WRITE_TIMEOUT to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_write_timeout (void *output);
     
 //  Send the WRITE_FAILED to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_write_failed (void *output,
         const char *reason);
     
 //  Send the CLOSE to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_close (void *output);
     
 //  Send the CLOSE_OK to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_close_ok (void *output);
     
 //  Send the CLOSE_FAILED to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_close_failed (void *output,
         const char *reason);
     
 //  Send the PING to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_ping (void *output);
     
 //  Send the PING_OK to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_ping_ok (void *output);
     
 //  Send the INVALID to the output in one step
+//  WARNING, this call will fail if output is of type ZMQ_ROUTER.
 CZMQ_EXPORT int
     zpipes_msg_send_invalid (void *output);
     

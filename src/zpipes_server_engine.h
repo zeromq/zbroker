@@ -359,6 +359,19 @@ engine_handle_socket (server_t *server, void *socket, zloop_fn handler)
     }
 }
 
+//  Register monitor function that will be called at regular intervals
+//  by the server engine
+
+static void
+engine_set_monitor (server_t *server, size_t interval, zloop_timer_fn monitor)
+{
+    if (server) {
+        s_server_t *self = (s_server_t *) server;
+        int rc = zloop_timer (self->loop, interval, 0, monitor, self);
+        assert (rc >= 0);
+    }
+}
+
 //  Send log data for a specific client to the server log. Accepts a
 //  printf format.
 
@@ -416,6 +429,7 @@ s_satisfy_pedantic_compilers (void)
     engine_set_wakeup_event (NULL, 0, 0);
     engine_send_event (NULL, 0);
     engine_handle_socket (NULL, 0, NULL);
+    engine_set_monitor (NULL, 0, NULL);
     engine_log (NULL, NULL);
     engine_server_log (NULL, NULL);
     engine_set_log_prefix (NULL, NULL);
@@ -1654,6 +1668,23 @@ s_server_client_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
     return 0;
 }
 
+//  Watch server config file and reload if changed
+
+static int
+s_watch_server_config (zloop_t *loop, int timer_id, void *argument)
+{
+    s_server_t *self = (s_server_t *) argument;
+    if (zconfig_has_changed (self->config)
+    &&  zconfig_reload (&self->config) == 0) {
+        s_server_config_self (self);
+        self->server.config = self->config;
+        zlog_notice (self->log, "reloaded configuration from %s",
+            zconfig_filename (self->config));
+    }
+    return 0;
+}
+
+
 //  Finally here's the server thread itself, which polls its two
 //  sockets and processes incoming messages
 
@@ -1665,10 +1696,16 @@ s_server_task (void *args, zctx_t *ctx, void *pipe)
     zlog_notice (self->log, "starting zpipes_server service");
     zstr_send (self->pipe, "OK");
 
+    //  Set-up server monitor to watch for config file changes
+    engine_set_monitor ((server_t *) self, 1000, s_watch_server_config);
+    //  Set up handler for the two main sockets the server uses
     engine_handle_socket ((server_t *) self, self->pipe, s_server_control_message);
     engine_handle_socket ((server_t *) self, self->router, s_server_client_message);
+
+    //  Run reactor until there's a termination signal
     zloop_start (self->loop);
-    
+
+    //  Reactor has ended
     zlog_notice (self->log, "terminating zpipes_server service");
     s_server_destroy (&self);
 }

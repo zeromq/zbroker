@@ -30,7 +30,7 @@
 */
 
 #include <czmq.h>
-#include "../include/zpipes_msg.h"
+#include "../include//zpipes_msg.h"
 
 //  Structure of our class
 

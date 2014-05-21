@@ -21,12 +21,12 @@ s_wait (char *message)
 
 int main (void)
 {
-    zpipes_server_t *hosta = zpipes_server_new ();
-    zpipes_server_bind (hosta, "ipc://@/zpipes/hosta");
+    zactor_t *hosta = zactor_new (zpipes_server, NULL);
+    zstr_sendx (hosta, "BIND", "ipc://@/zpipes/hosta", NULL);
 
-    zpipes_server_t *hostb = zpipes_server_new ();
-    zpipes_server_bind (hostb, "ipc://@/zpipes/hostb");
-
+    zactor_t *hostb = zactor_new (zpipes_server, NULL);
+    zstr_sendx (hostb, "BIND", "ipc://@/zpipes/hostb", NULL);
+    
     //  Give time for cluster to interconnect
     zclock_sleep (250);
 
@@ -107,8 +107,7 @@ int main (void)
     reader = zpipes_client_new ("hosta", "test pipe 2");
     zpipes_client_destroy (&reader);
 
-    zpipes_server_destroy (&hosta);
-    zpipes_server_destroy (&hostb);
-    zclock_sleep (100);
+    zactor_destroy (&hosta);
+    zactor_destroy (&hostb);
     return 0;
 }

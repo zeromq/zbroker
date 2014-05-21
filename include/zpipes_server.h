@@ -27,29 +27,10 @@
 extern "C" {
 #endif
 
-//  Opaque class structure
-typedef struct _zpipes_server_t zpipes_server_t;
-
 //  @interface
-//  Create a new zpipes_server
-zpipes_server_t *
-    zpipes_server_new (void);
-
-//  Destroy the zpipes_server
+//  This is zpipes_server, implemented as a CZMQ zactor task
 void
-    zpipes_server_destroy (zpipes_server_t **self_p);
-
-//  Load server configuration data
-void
-    zpipes_server_configure (zpipes_server_t *self, const char *config_file);
-
-//  Set one configuration option value
-void
-    zpipes_server_set (zpipes_server_t *self, const char *path, const char *value);
-
-//  Binds the server to an endpoint, formatted as printf string
-long
-    zpipes_server_bind (zpipes_server_t *self, const char *format, ...);
+    zpipes_server (zsock_t *pipe, void *args);
 
 //  Self test of this class
 void

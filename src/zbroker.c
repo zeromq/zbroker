@@ -12,7 +12,7 @@
 
 #include "zbroker_classes.h"
 
-#define PRODUCT         "zbroker service/0.0.1"
+#define PRODUCT         "zbroker service/0.0.2"
 #define COPYRIGHT       "Copyright (c) 2014 the Contributors"
 #define NOWARRANTY \
 "This Software is provided under the MPLv2 License on an \"as is\" basis,\n" \
@@ -59,16 +59,22 @@ int main (int argc, char *argv [])
         zclock_log ("E: cannot load config file '%s'\n", config_file);
         return 1;
     }
-    zpipes_server_t *zpipes_server = zpipes_server_new ();
-    zpipes_server_configure (zpipes_server, config_file);
-
-    //  Wait until process is interrupted
-    while (!zctx_interrupted)
-        zclock_sleep (1000);
-
-    puts ("interrupted");
-
+    zactor_t *server = zactor_new (zpipes_server, NULL);
+    zstr_sendx (server, "CONFIGURE", config_file, NULL);
+    
+    //  Accept and print any message back from server
+    while (true) {
+        char *message = zstr_recv (server);
+        if (message) {
+            puts (message);
+            free (message);
+        }
+        else {
+            puts ("interrupted");
+            break;
+        }
+    }
     //  Shutdown all services
-    zpipes_server_destroy (&zpipes_server);
+    zactor_destroy (&server);
     return 0;
 }

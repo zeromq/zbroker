@@ -23,8 +23,7 @@
 //  Structure of zpipes_client class
 
 struct _zpipes_client_t {
-    zctx_t *ctx;                //  Private CZMQ context
-    void *dealer;               //  Dealer socket to zpipes server
+    zsock_t *dealer;            //  Dealer socket to zpipes server
     int error;                  //  Last error cause
 };
 
@@ -59,11 +58,9 @@ zpipes_client_new (const char *server_name, const char *pipe_name)
     assert (self);
     
     //  Create dealer socket and connect to server IPC port
-    self->ctx = zctx_new ();
-    assert (self->ctx);
-    self->dealer = zsocket_new (self->ctx, ZMQ_DEALER);
+    self->dealer = zsock_new (ZMQ_DEALER);
     assert (self->dealer);
-    int rc = zsocket_connect (self->dealer, "ipc://@/zpipes/%s", server_name);
+    int rc = zsock_connect (self->dealer, "ipc://@/zpipes/%s", server_name);
     assert (rc == 0);
 
     //  Open pipe for reading or writing
@@ -97,7 +94,7 @@ zpipes_client_destroy (zpipes_client_t **self_p)
             zpipes_msg_t *reply = zpipes_msg_recv (self->dealer);
             zpipes_msg_destroy (&reply);
         }
-        zctx_destroy (&self->ctx);
+        zsock_destroy (&self->dealer);
         free (self);
         *self_p = NULL;
     }
@@ -217,10 +214,10 @@ zpipes_client_test (bool verbose)
 {
     printf (" * zpipes_client: ");
     //  @selftest
-    zpipes_server_t *server = zpipes_server_new ();
-    zpipes_server_set (server, "server/animate", verbose? "1": "0");
-    zpipes_server_bind (server, "ipc://@/zpipes/local");
-
+    zactor_t *server = zactor_new (zpipes_server, NULL);
+    zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
+    zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
+    
     zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");
     zpipes_client_t *writer = zpipes_client_new ("local", ">test pipe");
 
@@ -261,7 +258,8 @@ zpipes_client_test (bool verbose)
     assert (zpipes_client_error (reader) == EBADF);
 
     zpipes_client_destroy (&reader);
-    zpipes_server_destroy (&server);
+    zpipes_client_destroy (&writer);
+    zactor_destroy (&server);
 
     //  @end
     printf ("OK\n");

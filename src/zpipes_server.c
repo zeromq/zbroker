@@ -23,7 +23,7 @@
 //  This method handles all traffic from other server nodes
 
 static int
-zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument);
+zyre_handler (zloop_t *loop, zsock_t *reader, void *argument);
 
 //  ---------------------------------------------------------------------
 //  Forward declarations for the two main classes we use here
@@ -37,7 +37,6 @@ typedef struct _client_t client_t;
 struct _server_t {
     //  These properties must always be present in the server_t
     //  and are set by the generated engine; do not modify them!
-    zctx_t *ctx;                //  Parent ZeroMQ context
     zlog_t *log;                //  For any logging needed
     zconfig_t *config;          //  Current loaded configuration
     
@@ -92,10 +91,9 @@ static int
 server_initialize (server_t *self)
 {
     self->pipes = zhash_new ();
-    self->zyre = zyre_new (self->ctx);
+    self->zyre = zyre_new ();
     //  Set rapid cluster discovery; this is tuned for wired LAN not WiFi
     zyre_set_interval (self->zyre, 250);
-//     zyre_set_verbose (self->zyre);
     zyre_start (self->zyre);
     zyre_join (self->zyre, "ZPIPES");
 
@@ -728,7 +726,7 @@ server_process_cluster_command (
 }
 
 static int
-zyre_handler (zloop_t *loop, zmq_pollitem_t *item, void *argument)
+zyre_handler (zloop_t *loop, zsock_t *reader, void *argument)
 {
     server_t *self = (server_t *) argument;
     zmsg_t *msg = zyre_recv (self->zyre);
@@ -793,30 +791,26 @@ zpipes_server_test (bool verbose)
     printf (" * zpipes_server: \n");
 
     //  @selftest
-    zctx_t *ctx = zctx_new ();
-
     //  Prepare test cases
-    zpipes_server_t *self = zpipes_server_new ();
-    zpipes_server_set (self, "server/animate", verbose? "1": "0");
+    zactor_t *server = zactor_new (zpipes_server, NULL);
+    zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
+    zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
 
-    assert (self);
-    zpipes_server_bind (self, "ipc://@/zpipes/local");
-
-    void *writer = zsocket_new (ctx, ZMQ_DEALER);
+    zsock_t *writer = zsock_new (ZMQ_DEALER);
     assert (writer);
-    zsocket_connect (writer, "ipc://@/zpipes/local");
+    zsock_connect (writer, "ipc://@/zpipes/local");
 
-    void *writer2 = zsocket_new (ctx, ZMQ_DEALER);
+    zsock_t *writer2 = zsock_new (ZMQ_DEALER);
     assert (writer2);
-    zsocket_connect (writer2, "ipc://@/zpipes/local");
+    zsock_connect (writer2, "ipc://@/zpipes/local");
 
-    void *reader = zsocket_new (ctx, ZMQ_DEALER);
+    zsock_t *reader = zsock_new (ZMQ_DEALER);
     assert (reader);
-    zsocket_connect (reader, "ipc://@/zpipes/local");
+    zsock_connect (reader, "ipc://@/zpipes/local");
     
-    void *reader2 = zsocket_new (ctx, ZMQ_DEALER);
+    zsock_t *reader2 = zsock_new (ZMQ_DEALER);
     assert (reader2);
-    zsocket_connect (reader2, "ipc://@/zpipes/local");
+    zsock_connect (reader2, "ipc://@/zpipes/local");
     
     zchunk_t *chunk = zchunk_new ("Hello, World", 12);
     int32_t timeout = 100;
@@ -1031,7 +1025,7 @@ zpipes_server_test (bool verbose)
     //  Test connection expiry
 
     //  Set connection timeout to 200 msecs
-    zpipes_server_set (self, "server/timeout", "200");
+    zstr_sendx (server, "SET", "server/timeout", "200", NULL);
 
     //  Open reader on pipe
     zpipes_msg_send_input (reader, "test pipe");
@@ -1286,13 +1280,12 @@ zpipes_server_test (bool verbose)
 
     //  --------------------------------------------------------------------
     zchunk_destroy (&chunk);
-    zpipes_server_destroy (&self);
-    zctx_destroy (&ctx);
+    zactor_destroy (&server);
+    zsock_destroy (&reader);
+    zsock_destroy (&writer);
+    zsock_destroy (&reader2);
+    zsock_destroy (&writer2);
     //  @end
 
-    //  No clean way to wait for a background thread to exit
-    //  Under valgrind this will randomly show as leakage
-    //  Reduce this by giving server thread time to exit
-    zclock_sleep (200);
     printf ("OK\n");
 }

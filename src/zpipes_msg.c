@@ -1742,11 +1742,11 @@ zpipes_msg_test (bool verbose)
     //  Create pair of sockets we can send through
     zsock_t *input = zsock_new (ZMQ_ROUTER);
     assert (input);
-    zsock_connect (input, "inproc://selftest");
+    zsock_connect (input, "inproc://selftest-zpipes_msg");
 
     zsock_t *output = zsock_new (ZMQ_DEALER);
     assert (output);
-    zsock_bind (output, "inproc://selftest");
+    zsock_bind (output, "inproc://selftest-zpipes_msg");
 
     //  Encode/send/decode and verify each message type
     int instance;

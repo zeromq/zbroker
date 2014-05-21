@@ -20,118 +20,6 @@
     =========================================================================
 */
 
-//  The server runs as a background thread so that we can run multiple
-//  classs at once. The API talks to the server thread over an inproc
-//  pipe.
-
-static void
-s_server_task (void *args, zctx_t *ctx, void *pipe);
-
-//  ---------------------------------------------------------------------
-//  Structure of the front-end API class for zpipes_server
-
-struct _zpipes_server_t {
-    zctx_t *ctx;        //  CZMQ context
-    void *pipe;         //  Pipe through to server
-};
-
-
-//  --------------------------------------------------------------------------
-//  Create a new zpipes_server and a new server instance
-
-zpipes_server_t *
-zpipes_server_new (void)
-{
-    zpipes_server_t *self = (zpipes_server_t *) zmalloc (sizeof (zpipes_server_t));
-    assert (self);
-
-    //  Start a background thread for each server instance
-    self->ctx = zctx_new ();
-    self->pipe = zthread_fork (self->ctx, s_server_task, NULL);
-    if (self->pipe) {
-        char *status = zstr_recv (self->pipe);
-        if (strneq (status, "OK"))
-            zpipes_server_destroy (&self);
-        zstr_free (&status);
-    }
-    else {
-        free (self);
-        self = NULL;
-    }
-    return self;
-}
-
-
-//  --------------------------------------------------------------------------
-//  Destroy the zpipes_server and stop the server
-
-void
-zpipes_server_destroy (zpipes_server_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        zpipes_server_t *self = *self_p;
-        if (!zctx_interrupted) {
-            zstr_send (self->pipe, "TERMINATE");
-            zsocket_wait (self->pipe);
-        }
-        zctx_destroy (&self->ctx);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-
-//  --------------------------------------------------------------------------
-//  Load server configuration data
-
-void
-zpipes_server_configure (zpipes_server_t *self, const char *config_file)
-{
-    zstr_sendm (self->pipe, "CONFIGURE");
-    zstr_send (self->pipe, config_file);
-    zsocket_wait (self->pipe);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Set one configuration option value
-
-void
-zpipes_server_set (zpipes_server_t *self, const char *path, const char *value)
-{
-    zstr_sendm (self->pipe, "SET");
-    zstr_sendm (self->pipe, path);
-    zstr_send  (self->pipe, value);
-    zsocket_wait (self->pipe);
-}
-
-
-//  --------------------------------------------------------------------------
-//  Binds the server to an endpoint, formatted as printf string
-
-long
-zpipes_server_bind (zpipes_server_t *self, const char *format, ...)
-{
-    assert (self);
-    assert (format);
-    
-    //  Format endpoint from provided arguments
-    va_list argptr;
-    va_start (argptr, format);
-    char *endpoint = zsys_vprintf (format, argptr);
-    va_end (argptr);
-
-    //  Send BIND command to server task
-    zstr_sendm (self->pipe, "BIND");
-    zstr_send (self->pipe, endpoint);
-    char *reply = zstr_recv (self->pipe);
-    long reply_value = atol (reply);
-    free (reply);
-    free (endpoint);
-    return reply_value;
-}
-
 
 //  ---------------------------------------------------------------------
 //  State machine constants
@@ -217,9 +105,8 @@ s_event_name [] = {
 
 typedef struct {
     server_t server;            //  Application-level server context
-    zctx_t *ctx;                //  Each thread has its own CZMQ context
-    void *pipe;                 //  Socket to back to caller API
-    void *router;               //  Socket to talk to clients
+    zsock_t *pipe;              //  Socket to back to caller API
+    zsock_t *router;            //  Socket to talk to clients
     int port;                   //  Server port bound to
     zloop_t *loop;              //  Reactor for server sockets
     zhash_t *clients;           //  Clients we're connected to
@@ -227,7 +114,6 @@ typedef struct {
     zlog_t *log;                //  Server logger
     uint client_id;             //  Client identifier counter
     size_t timeout;             //  Default client expiry timeout
-    bool terminated;            //  Server is shutting down
     bool animate;               //  Is animation enabled?
 } s_server_t;
 
@@ -348,14 +234,13 @@ engine_send_event (client_t *client, event_t event)
 //  Handler must be a CZMQ zloop_fn function; receives server as arg.
 
 static void
-engine_handle_socket (server_t *server, void *socket, zloop_fn handler)
+engine_handle_socket (server_t *server, zsock_t *socket, zloop_reader_fn handler)
 {
     if (server) {
         s_server_t *self = (s_server_t *) server;
-        zmq_pollitem_t poll_item = { socket, 0, ZMQ_POLLIN };
-        int rc = zloop_poller (self->loop, &poll_item, handler, self);
+        int rc = zloop_reader (self->loop, socket, handler, self);
         assert (rc == 0);
-        zloop_set_tolerant (self->loop, &poll_item);
+        zloop_reader_set_tolerant (self->loop, socket);
     }
 }
 
@@ -1504,15 +1389,14 @@ s_server_config_self (s_server_t *self)
 }
 
 static s_server_t *
-s_server_new (zctx_t *ctx, void *pipe)
+s_server_new (zsock_t *pipe)
 {
     s_server_t *self = (s_server_t *) zmalloc (sizeof (s_server_t));
     assert (self);
     assert ((s_server_t *) &self->server == self);
 
-    self->ctx = ctx;
     self->pipe = pipe;
-    self->router = zsocket_new (self->ctx, ZMQ_ROUTER);
+    self->router = zsock_new (ZMQ_ROUTER);
     self->clients = zhash_new ();
     self->log = zlog_new ("zpipes_server");
     self->config = zconfig_new ("root", NULL);
@@ -1522,7 +1406,6 @@ s_server_new (zctx_t *ctx, void *pipe)
     s_server_config_self (self);
 
     //  Initialize application server context
-    self->server.ctx = self->ctx;
     self->server.log = self->log;
     self->server.config = self->config;
     server_initialize (&self->server);
@@ -1538,7 +1421,7 @@ s_server_destroy (s_server_t **self_p)
     if (*self_p) {
         s_server_t *self = *self_p;
         server_terminate (&self->server);
-        zsocket_destroy (self->ctx, self->router);
+        zsock_destroy (&self->router);
         zconfig_destroy (&self->config);
         zhash_destroy (&self->clients);
         zloop_destroy (&self->loop);
@@ -1567,7 +1450,7 @@ s_server_apply_config (s_server_t *self)
         else
         if (streq (zconfig_name (section), "bind")) {
             char *endpoint = zconfig_resolve (section, "endpoint", "?");
-            int rc = zsocket_bind (self->router, "%s", endpoint);
+            int rc = zsock_bind (self->router, "%s", endpoint);
             assert (rc != -1);
         }
         section = zconfig_next (section);
@@ -1578,20 +1461,25 @@ s_server_apply_config (s_server_t *self)
 //  Process message from pipe
 
 static int
-s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
+s_server_control_message (zloop_t *loop, zsock_t *reader, void *argument)
 {
     s_server_t *self = (s_server_t *) argument;
     zmsg_t *msg = zmsg_recv (self->pipe);
     if (!msg)
         return -1;              //  Interrupted; exit zloop
     char *method = zmsg_popstr (msg);
+    if (streq (method, "$TERM")) {
+        free (method);
+        zmsg_destroy (&msg);
+        return -1;
+    }
+    else
     if (streq (method, "BIND")) {
         char *endpoint = zmsg_popstr (msg);
-        self->port = zsocket_bind (self->router, "%s", endpoint);
+        self->port = zsock_bind (self->router, "%s", endpoint);
         assert (self->port != -1);
         zstr_sendf (self->pipe, "%d", self->port);
         free (endpoint);
-        zsocket_signal (self->pipe);
     }
     else
     if (streq (method, "CONFIGURE")) {
@@ -1608,7 +1496,6 @@ s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
             self->config = zconfig_new ("root", NULL);
         }
         free (config_file);
-        zsocket_signal (self->pipe);
     }
     else
     if (streq (method, "SET")) {
@@ -1618,12 +1505,6 @@ s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
         s_server_config_self (self);
         free (path);
         free (value);
-        zsocket_signal (self->pipe);
-    }
-    else
-    if (streq (method, "TERMINATE")) {
-        self->terminated = true;
-        zsocket_signal (self->pipe);
     }
     else
         zlog_error (self->log, "Invalid API method: %s", method);
@@ -1636,7 +1517,7 @@ s_server_control_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
 //  Handle a message (a protocol request) from the client
 
 static int
-s_server_client_message (zloop_t *loop, zmq_pollitem_t *item, void *argument)
+s_server_client_message (zloop_t *loop, zsock_t *reader, void *argument)
 {
     s_server_t *self = (s_server_t *) argument;
     zpipes_msg_t *msg = zpipes_msg_recv (self->router);
@@ -1685,16 +1566,21 @@ s_watch_server_config (zloop_t *loop, int timer_id, void *argument)
 }
 
 
-//  Finally here's the server thread itself, which polls its two
-//  sockets and processes incoming messages
 
-static void
-s_server_task (void *args, zctx_t *ctx, void *pipe)
+
+
+//  ---------------------------------------------------------------------
+//  This is the server actor, which polls its two sockets and processes
+//  incoming messages
+
+void
+zpipes_server (zsock_t *pipe, void *args)
 {
-    s_server_t *self = s_server_new (ctx, pipe);
+    //  Initialize
+    s_server_t *self = s_server_new (pipe);
     assert (self);
     zlog_notice (self->log, "starting zpipes_server service");
-    zstr_send (self->pipe, "OK");
+    zsock_signal (pipe);
 
     //  Set-up server monitor to watch for config file changes
     engine_set_monitor ((server_t *) self, 1000, s_watch_server_config);

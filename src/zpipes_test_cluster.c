@@ -21,11 +21,17 @@ s_wait (char *message)
 
 int main (void)
 {
+    char *animate = "0";
+    
     zactor_t *hosta = zactor_new (zpipes_server, NULL);
     zstr_sendx (hosta, "BIND", "ipc://@/zpipes/hosta", NULL);
+    zstr_sendx (hosta, "SET", "server/animate", animate, NULL);
+    zstr_sendx (hosta, "JOIN CLUSTER", "hosta", NULL);
 
     zactor_t *hostb = zactor_new (zpipes_server, NULL);
     zstr_sendx (hostb, "BIND", "ipc://@/zpipes/hostb", NULL);
+    zstr_sendx (hostb, "SET", "server/animate", animate, NULL);
+    zstr_sendx (hostb, "JOIN CLUSTER", "hostb", NULL);
     
     //  Give time for cluster to interconnect
     zclock_sleep (250);

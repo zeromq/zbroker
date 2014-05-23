@@ -1,5 +1,5 @@
 MAN1 =
-MAN3 = zpipes.1
+MAN3 = zpipes_server.3 zpipes_client.3 zpipes_msg.3
 MAN7 = 
 MAN_DOC = $(MAN1) $(MAN3) $(MAN7)
 

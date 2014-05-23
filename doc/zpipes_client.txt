@@ -1,0 +1,104 @@
+zpipes_client(3)
+================
+
+NAME
+----
+zpipes_client - no title found
+
+SYNOPSIS
+--------
+----
+//  Constructor; open ">pipename" for writing, "pipename" for reading
+CZMQ_EXPORT zpipes_client_t *
+    zpipes_client_new (const char *broker_name, const char *pipe_name);
+
+//  Destructor; closes pipe
+CZMQ_EXPORT void
+    zpipes_client_destroy (zpipes_client_t **self_p);
+
+//  Write chunk of data to pipe; returns number of bytes written, or -1
+//  in case of error, and then sets zpipes_client_error() to EBADF.
+CZMQ_EXPORT ssize_t
+    zpipes_client_write (zpipes_client_t *self,
+                         void *data, size_t size, int timeout);
+
+//  Read chunk of data from pipe. If timeout is non zero, waits at most
+//  that many msecs for data. Returns number of bytes read, or zero if the
+//  pipe was closed by the writer, and no more data is available. On a
+//  timeout or interrupt, returns -1. To get the actual error code, call
+//  zpipes_client_error(), which will be EINTR, EAGAIN, or EBADF.
+CZMQ_EXPORT ssize_t
+    zpipes_client_read (zpipes_client_t *self,
+                        void *data, size_t max_size, int timeout);
+
+//  Returns last error number, if any
+CZMQ_EXPORT int
+    zpipes_client_error (zpipes_client_t *self);
+
+// Self test of this class
+CZMQ_EXPORT void
+    zpipes_client_test (bool verbose);
+----
+
+DESCRIPTION
+-----------
+
+Provides an API to the ZPIPES infrastructure.
+
+
+EXAMPLE
+-------
+.From zpipes_client_test method
+----
+    zactor_t *server = zactor_new (zpipes_server, NULL);
+    zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
+    zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
+    
+    zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");
+    zpipes_client_t *writer = zpipes_client_new ("local", ">test pipe");
+
+    byte buffer [100];
+    ssize_t bytes;
+
+    //  Expect timeout error, EAGAIN
+    bytes = zpipes_client_read (reader, buffer, 6, 100);
+    assert (bytes == -1);
+    assert (zpipes_client_error (reader) == EAGAIN);
+
+    bytes = zpipes_client_write (writer, "CHUNK1", 6, 100);
+    assert (bytes == 6);
+    bytes = zpipes_client_write (writer, "CHUNK2", 6, 100);
+    assert (bytes == 6);
+    bytes = zpipes_client_write (writer, "CHUNK3", 6, 100);
+    assert (bytes == 6);
+
+    bytes = zpipes_client_read (reader, buffer, 1, 100);
+    assert (bytes == 1);
+    bytes = zpipes_client_read (reader, buffer, 10, 100);
+    assert (bytes == 10);
+
+    //  Now close writer
+    zpipes_client_destroy (&writer);
+
+    //  Expect end of pipe (short read)
+    bytes = zpipes_client_read (reader, buffer, 50, 100);
+    assert (bytes == 7);
+    
+    //  Expect end of pipe (empty chunk)
+    bytes = zpipes_client_read (reader, buffer, 50, 100);
+    assert (bytes == 0);
+
+    //  Expect illegal action (EBADF) writing on reader
+    bytes = zpipes_client_write (reader, "CHUNK1", 6, 100);
+    assert (bytes == -1);
+    assert (zpipes_client_error (reader) == EBADF);
+
+    zpipes_client_destroy (&reader);
+    zpipes_client_destroy (&writer);
+    zactor_destroy (&server);
+
+----
+
+SEE ALSO
+--------
+linkzpipes:zpipes[7]

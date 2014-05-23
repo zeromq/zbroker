@@ -144,6 +144,8 @@ static int
     server_initialize (server_t *self);
 static void
     server_terminate (server_t *self);
+static zmsg_t *
+    server_method (server_t *self, const char *method, zmsg_t *msg);
 static int
     client_initialize (client_t *self);
 static void
@@ -238,9 +240,13 @@ engine_handle_socket (server_t *server, zsock_t *socket, zloop_reader_fn handler
 {
     if (server) {
         s_server_t *self = (s_server_t *) server;
-        int rc = zloop_reader (self->loop, socket, handler, self);
-        assert (rc == 0);
-        zloop_reader_set_tolerant (self->loop, socket);
+        if (handler) {
+            int rc = zloop_reader (self->loop, socket, handler, self);
+            assert (rc == 0);
+            zloop_reader_set_tolerant (self->loop, socket);
+        }
+        else
+            zloop_reader_end (self->loop, socket);
     }
 }
 
@@ -1461,7 +1467,7 @@ s_server_apply_config (s_server_t *self)
 //  Process message from pipe
 
 static int
-s_server_control_message (zloop_t *loop, zsock_t *reader, void *argument)
+s_server_api_message (zloop_t *loop, zsock_t *reader, void *argument)
 {
     s_server_t *self = (s_server_t *) argument;
     zmsg_t *msg = zmsg_recv (self->pipe);
@@ -1506,9 +1512,12 @@ s_server_control_message (zloop_t *loop, zsock_t *reader, void *argument)
         free (path);
         free (value);
     }
-    else
-        zlog_error (self->log, "Invalid API method: %s", method);
-
+    else {
+        //  Execute custom method
+        zmsg_t *reply = server_method (&self->server, method, msg);
+        //  If reply isn't null, send it to caller
+        zmsg_send (&reply, self->pipe);
+    }
     free (method);
     zmsg_destroy (&msg);
     return 0;
@@ -1566,9 +1575,6 @@ s_watch_server_config (zloop_t *loop, int timer_id, void *argument)
 }
 
 
-
-
-
 //  ---------------------------------------------------------------------
 //  This is the server actor, which polls its two sockets and processes
 //  incoming messages
@@ -1580,12 +1586,12 @@ zpipes_server (zsock_t *pipe, void *args)
     s_server_t *self = s_server_new (pipe);
     assert (self);
     zlog_notice (self->log, "starting zpipes_server service");
-    zsock_signal (pipe);
+    zsock_signal (pipe, 0);
 
     //  Set-up server monitor to watch for config file changes
     engine_set_monitor ((server_t *) self, 1000, s_watch_server_config);
     //  Set up handler for the two main sockets the server uses
-    engine_handle_socket ((server_t *) self, self->pipe, s_server_control_message);
+    engine_handle_socket ((server_t *) self, self->pipe, s_server_api_message);
     engine_handle_socket ((server_t *) self, self->router, s_server_client_message);
 
     //  Run reactor until there's a termination signal

@@ -61,6 +61,7 @@ int main (int argc, char *argv [])
     }
     zactor_t *server = zactor_new (zpipes_server, NULL);
     zstr_sendx (server, "CONFIGURE", config_file, NULL);
+    zstr_sendx (server, "JOIN CLUSTER", "hosta", NULL);
     
     //  Accept and print any message back from server
     while (true) {

@@ -20,11 +20,6 @@
 
 #include "zbroker_classes.h"
 
-//  This method handles all traffic from other server nodes
-
-static int
-zyre_handler (zloop_t *loop, zsock_t *reader, void *argument);
-
 //  ---------------------------------------------------------------------
 //  Forward declarations for the two main classes we use here
 
@@ -83,6 +78,15 @@ struct _client_t {
 
 #include "zpipes_server_engine.h"
 
+//  This method handles all traffic from other server nodes
+
+static int
+    zyre_handler (zloop_t *loop, zsock_t *reader, void *argument);
+static void
+    server_join_cluster (server_t *self);
+static void
+    server_leave_cluster (server_t *self);
+
 
 //  Allocate properties and structures for a new server instance.
 //  Return 0 if OK, or -1 if there was an error.
@@ -91,8 +95,38 @@ static int
 server_initialize (server_t *self)
 {
     self->pipes = zhash_new ();
+    return 0;
+}
+
+//  Free properties and structures for a server instance
+
+static void
+server_terminate (server_t *self)
+{
+    zyre_destroy (&self->zyre);
+    zhash_destroy (&self->pipes);
+}
+
+//  Process server API method, return reply message if any
+
+static zmsg_t *
+server_method (server_t *self, const char *method, zmsg_t *msg)
+{
+    if (streq (method, "JOIN CLUSTER"))
+        server_join_cluster (self);
+    else
+    if (streq (method, "LEAVE CLUSTER"))
+        server_leave_cluster (self);
+
+    return NULL;
+}
+
+//  Join local cluster, uses Zyre for clustering
+
+static void
+server_join_cluster (server_t *self)
+{
     self->zyre = zyre_new ();
-    //  Set rapid cluster discovery; this is tuned for wired LAN not WiFi
     zyre_set_interval (self->zyre, 250);
     zyre_start (self->zyre);
     zyre_join (self->zyre, "ZPIPES");
@@ -104,17 +138,17 @@ server_initialize (server_t *self)
 
     //  Set-up reader for Zyre events
     engine_handle_socket (self, zyre_socket (self->zyre), zyre_handler);
-    
-    return 0;
 }
 
-//  Free properties and structures for a server instance
+
+//  Leave local cluster
 
 static void
-server_terminate (server_t *self)
+server_leave_cluster (server_t *self)
 {
+    //  Cancel reader for Zyre events
+    engine_handle_socket (self, zyre_socket (self->zyre), NULL);
     zyre_destroy (&self->zyre);
-    zhash_destroy (&self->pipes);
 }
 
 
@@ -207,16 +241,19 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
         zclock_log ("%s: attach local reader", self->name);
         self->reader = reader;
         if (self->writer == NULL) {
-            //  Announce that we have a new pipe reader so that writers
-            //  in the cluster may discover us
-            zmsg_t *msg = zmsg_new ();
-            zmsg_addstr (msg, "HAVE READER");
-            zmsg_addstr (msg, self->name);
-            zyre_shout (self->server->zyre, "ZPIPES", &msg);
-            zclock_log ("%s: broadcast we are now reader", self->name);
+            if (self->server->zyre) {
+                //  Announce that we have a new pipe reader so that writers
+                //  in the cluster may discover us
+                zmsg_t *msg = zmsg_new ();
+                zmsg_addstr (msg, "HAVE READER");
+                zmsg_addstr (msg, self->name);
+                zyre_shout (self->server->zyre, "ZPIPES", &msg);
+                zclock_log ("%s: broadcast we are now reader", self->name);
+            }
         }
         else
         if (self->writer == REMOTE_NODE) {
+            assert (self->server->zyre);
             //  Tell remote node we would like to be reader
             zmsg_t *msg = zmsg_new ();
             zmsg_addstr (msg, "HAVE READER");
@@ -284,16 +321,19 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
         zclock_log ("%s: attach local writer", self->name);
         self->writer = writer;
         if (self->reader == NULL) {
-            //  Announce that we have a new pipe writer so that readers
-            //  in the cluster may discover us
-            zmsg_t *msg = zmsg_new ();
-            zmsg_addstr (msg, "HAVE WRITER");
-            zmsg_addstr (msg, self->name);
-            zyre_shout (self->server->zyre, "ZPIPES", &msg);
-            zclock_log ("%s: broadcast we are now writer", self->name);
+            if (self->server->zyre) {
+                //  Announce that we have a new pipe writer so that readers
+                //  in the cluster may discover us
+                zmsg_t *msg = zmsg_new ();
+                zmsg_addstr (msg, "HAVE WRITER");
+                zmsg_addstr (msg, self->name);
+                zyre_shout (self->server->zyre, "ZPIPES", &msg);
+                zclock_log ("%s: broadcast we are now writer", self->name);
+            }
         }
         else
         if (self->reader == REMOTE_NODE) {
+            assert (self->server->zyre);
             //  Tell remote node we would like to be writer
             zmsg_t *msg = zmsg_new ();
             zmsg_addstr (msg, "HAVE WRITER");
@@ -733,7 +773,7 @@ zyre_handler (zloop_t *loop, zsock_t *reader, void *argument)
     if (!msg)
         return -1;              //  Interrupted
 
-//     zmsg_dump (msg);
+    zmsg_dump (msg);
     char *command = zmsg_popstr (msg);
     char *remote = zmsg_popstr (msg);
     char remote_short [7];

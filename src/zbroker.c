@@ -61,7 +61,12 @@ int main (int argc, char *argv [])
     }
     zactor_t *server = zactor_new (zpipes_server, NULL);
     zstr_sendx (server, "CONFIGURE", config_file, NULL);
-    zstr_sendx (server, "JOIN CLUSTER", "hosta", NULL);
+    zstr_sendx (server, "JOIN CLUSTER", NULL);
+    
+    char *reply = zstr_recv (server);
+    if (strneq (reply, "OK"))
+        zclock_log ("W: no UDP discovery, cannot join cluster");
+    free (reply);
     
     //  Accept and print any message back from server
     while (true) {

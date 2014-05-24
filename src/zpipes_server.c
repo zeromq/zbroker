@@ -82,7 +82,7 @@ struct _client_t {
 
 static int
     zyre_handler (zloop_t *loop, zsock_t *reader, void *argument);
-static void
+static int
     server_join_cluster (server_t *self);
 static void
     server_leave_cluster (server_t *self);
@@ -112,8 +112,12 @@ server_terminate (server_t *self)
 static zmsg_t *
 server_method (server_t *self, const char *method, zmsg_t *msg)
 {
-    if (streq (method, "JOIN CLUSTER"))
-        server_join_cluster (self);
+    if (streq (method, "JOIN CLUSTER")) {
+        //  We signal to caller, OK or SNAFU
+        zmsg_t *msg = zmsg_new ();
+        zmsg_addstr (msg, server_join_cluster (self)? "SNAFU": "OK");
+        return msg;
+    }
     else
     if (streq (method, "LEAVE CLUSTER"))
         server_leave_cluster (self);
@@ -123,12 +127,24 @@ server_method (server_t *self, const char *method, zmsg_t *msg)
 
 //  Join local cluster, uses Zyre for clustering
 
-static void
+static int
 server_join_cluster (server_t *self)
 {
+    //  Get Zyre configuration properties
+    char *interval = zconfig_resolve (self->config, "zyre/interval", NULL);
+    char *port = zconfig_resolve (self->config, "zyre/port", NULL);
+    //  TODO:
+    //  - node identifier
+    //  - interface to use -> zsys_set_interface
     self->zyre = zyre_new ();
-    zyre_set_interval (self->zyre, 250);
-    zyre_start (self->zyre);
+    if (interval)
+        zyre_set_interval (self->zyre, atoi (interval));
+    if (port)
+        zyre_set_port (self->zyre, atoi (port));
+    if (zyre_start (self->zyre)) {
+        zlog_warning (self->log, "clustering not working");
+        return -1;              //  Can't join cluster
+    }
     zyre_join (self->zyre, "ZPIPES");
 
     //  Get 6-character Zyre UUID for logging
@@ -138,6 +154,7 @@ server_join_cluster (server_t *self)
 
     //  Set-up reader for Zyre events
     engine_handle_socket (self, zyre_socket (self->zyre), zyre_handler);
+    return 0;
 }
 
 

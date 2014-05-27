@@ -37,7 +37,6 @@ struct _server_t {
     
     //  These properties are specific for this application
     char *name;                 //  Server public name
-    char uuid [7];              //  Truncated Zyre UUID, 6 chars
     zhash_t *pipes;             //  Collection of pipes
     zyre_t *zyre;               //  Zyre node
 };
@@ -82,7 +81,7 @@ struct _client_t {
 
 static int
     zyre_handler (zloop_t *loop, zsock_t *reader, void *argument);
-static void
+static int
     server_join_cluster (server_t *self);
 static void
     server_leave_cluster (server_t *self);
@@ -103,6 +102,7 @@ server_initialize (server_t *self)
 static void
 server_terminate (server_t *self)
 {
+    free (self->name);
     zyre_destroy (&self->zyre);
     zhash_destroy (&self->pipes);
 }
@@ -112,8 +112,12 @@ server_terminate (server_t *self)
 static zmsg_t *
 server_method (server_t *self, const char *method, zmsg_t *msg)
 {
-    if (streq (method, "JOIN CLUSTER"))
-        server_join_cluster (self);
+    if (streq (method, "JOIN CLUSTER")) {
+        //  We signal to caller, OK or SNAFU
+        zmsg_t *msg = zmsg_new ();
+        zmsg_addstr (msg, server_join_cluster (self)? "SNAFU": "OK");
+        return msg;
+    }
     else
     if (streq (method, "LEAVE CLUSTER"))
         server_leave_cluster (self);
@@ -123,21 +127,41 @@ server_method (server_t *self, const char *method, zmsg_t *msg)
 
 //  Join local cluster, uses Zyre for clustering
 
-static void
+static int
 server_join_cluster (server_t *self)
 {
     self->zyre = zyre_new ();
-    zyre_set_interval (self->zyre, 250);
-    zyre_start (self->zyre);
+    
+    //  Get Zyre configuration properties
+    char *value = zconfig_resolve (self->config, "zyre/interval", NULL);
+    if (value)
+        zyre_set_interval (self->zyre, atoi (value));
+    
+    value = zconfig_resolve (self->config, "zyre/port", NULL);
+    if (value)
+        zyre_set_port (self->zyre, atoi (value));
+    
+    value = zconfig_resolve (self->config, "zyre/name", NULL);
+    if (value)
+        zyre_set_name (self->zyre, value);
+    
+    value = zconfig_resolve (self->config, "zyre/interface", NULL);
+    if (value)
+        zyre_set_interface (self->zyre, value);
+    
+    if (zyre_start (self->zyre)) {
+        zlog_warning (self->log, "clustering not working");
+        return -1;              //  Can't join cluster
+    }
     zyre_join (self->zyre, "ZPIPES");
 
-    //  Get 6-character Zyre UUID for logging
-    strncpy (self->uuid, zyre_uuid (self->zyre), 6);
-    self->uuid [6] = 0;
-    zlog_info (self->log, "joining cluster as %s", self->uuid);
+    //  Get Zyre public name for logging
+    self->name = strdup (zyre_name (self->zyre));
+    zlog_info (self->log, "joining cluster as %s", self->name);
 
     //  Set-up reader for Zyre events
     engine_handle_socket (self, zyre_socket (self->zyre), zyre_handler);
+    return 0;
 }
 
 
@@ -712,17 +736,15 @@ collect_data_to_send (client_t *self)
 static void
 server_process_cluster_command (
     server_t *self,
-    const char *remote,
+    const char *peer_id,
+    const char *peer_name,
     zmsg_t *msg,
     bool unicast)
 {
     char *request = zmsg_popstr (msg);
     char *pipename = zmsg_popstr (msg);
-    char remote_short [7];
-    strncpy (remote_short, remote, 6);
-    remote_short [6] = 0;
-    engine_server_log (self, "remote=%s command=%s pipe=%s unicast=%d",
-                       remote_short, request, pipename, unicast);
+    engine_server_log (self, "peer=%s command=%s pipe=%s unicast=%d",
+                       peer_name, request, pipename, unicast);
 
     //  Lookup or create pipe
     //  TODO: remote pipes need cleaning up with some timeout
@@ -731,10 +753,10 @@ server_process_cluster_command (
         pipe = pipe_new (self, pipename);
 
     if (streq (request, "HAVE WRITER"))
-        pipe_attach_remote_writer (pipe, remote, unicast);
+        pipe_attach_remote_writer (pipe, peer_id, unicast);
     else
     if (streq (request, "HAVE READER"))
-        pipe_attach_remote_reader (pipe, remote, unicast);
+        pipe_attach_remote_reader (pipe, peer_id, unicast);
     else
     if (streq (request, "DATA")) {
         //  TODO encode these commands as proper protocol
@@ -754,12 +776,12 @@ server_process_cluster_command (
     }
     else
     if (streq (request, "DROP READER"))
-        pipe_drop_remote_reader (&pipe, remote);
+        pipe_drop_remote_reader (&pipe, peer_id);
     else
     if (streq (request, "DROP WRITER"))
-        pipe_drop_remote_writer (&pipe, remote);
+        pipe_drop_remote_writer (&pipe, peer_id);
     else
-        zlog_warning (self->log, "bad request %s from %s", request, remote);
+        zlog_warning (self->log, "bad request %s from %s", request, peer_name);
 
     zstr_free (&pipename);
     zstr_free (&request);
@@ -775,29 +797,28 @@ zyre_handler (zloop_t *loop, zsock_t *reader, void *argument)
 
     zmsg_dump (msg);
     char *command = zmsg_popstr (msg);
-    char *remote = zmsg_popstr (msg);
-    char remote_short [7];
-    strncpy (remote_short, remote, 6);
-    remote_short [6] = 0;
+    char *peer_id = zmsg_popstr (msg);
+    char *peer_name = zmsg_popstr (msg);
 
     if (streq (command, "ENTER"))
-        zlog_info (self->log, "ZPIPES server appeared at %s", remote_short);
+        zlog_info (self->log, "ZPIPES server appeared at %s", peer_name);
     else
     if (streq (command, "EXIT"))
-        zlog_info (self->log, "ZPIPES server vanished from %s", remote_short);
+        zlog_info (self->log, "ZPIPES server vanished from %s", peer_name);
     else
     if (streq (command, "SHOUT")) {
         char *group = zmsg_popstr (msg);
         if (streq (group, "ZPIPES"))
-            server_process_cluster_command (self, remote, msg, false);
+            server_process_cluster_command (self, peer_id, peer_name, msg, false);
         zstr_free (&group);
     }
     else
     if (streq (command, "WHISPER"))
-        server_process_cluster_command (self, remote, msg, true);
+        server_process_cluster_command (self, peer_id, peer_name, msg, true);
     
     zstr_free (&command);
-    zstr_free (&remote);
+    zstr_free (&peer_id);
+    zstr_free (&peer_name);
     zmsg_destroy (&msg);
     
     return 0;
@@ -835,6 +856,9 @@ zpipes_server_test (bool verbose)
     zactor_t *server = zactor_new (zpipes_server, NULL);
     zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
     zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
+    char *reply = zstr_recv (server);
+    assert (streq (reply, "0"));
+    free (reply);
 
     zsock_t *writer = zsock_new (ZMQ_DEALER);
     assert (writer);

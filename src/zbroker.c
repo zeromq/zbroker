@@ -56,7 +56,7 @@ int main (int argc, char *argv [])
         zconfig_destroy (&config);
     }
     else {
-        zclock_log ("E: cannot load config file '%s'\n", config_file);
+        zclock_log ("E: cannot load config file '%s'", config_file);
         return 1;
     }
     zactor_t *server = zactor_new (zpipes_server, NULL);
@@ -64,7 +64,7 @@ int main (int argc, char *argv [])
     zstr_sendx (server, "JOIN CLUSTER", NULL);
     
     char *reply = zstr_recv (server);
-    if (strneq (reply, "OK"))
+    if (reply && strneq (reply, "OK"))
         zclock_log ("W: no UDP discovery, cannot join cluster");
     free (reply);
     

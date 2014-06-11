@@ -115,6 +115,7 @@ typedef struct {
     uint client_id;             //  Client identifier counter
     size_t timeout;             //  Default client expiry timeout
     bool animate;               //  Is animation enabled?
+    char *log_prefix;           //  Default log prefix
 } s_server_t;
 
 
@@ -232,6 +233,27 @@ engine_send_event (client_t *client, event_t event)
     }
 }
 
+//  Execute 'event' on all clients known to the server. If you pass a
+//  client argument, that client will not receive the broadcast. If you
+//  want to pass any arguments, store them in the server context.
+
+static void
+engine_broadcast_event (server_t *server, client_t *client, event_t event)
+{
+    if (server) {
+        s_server_t *self = (s_server_t *) server;
+        zlist_t *keys = zhash_keys (self->clients);
+        char *key = (char *) zlist_first (keys);
+        while (key) {
+            s_client_t *target = (s_client_t *) zhash_lookup (self->clients, key);
+            if (client && target != (s_client_t *) client)
+                s_client_execute (target, event);
+            key = (char *) zlist_next (keys);
+        }
+        zlist_destroy (&keys);
+    }
+}
+
 //  Poll socket for activity, invoke handler on any received message.
 //  Handler must be a CZMQ zloop_fn function; receives server as arg.
 
@@ -309,6 +331,20 @@ engine_set_log_prefix (client_t *client, const char *string)
     }
 }
 
+//  Set a configuration value in the server's configuration tree.
+//  The properties this engine uses are: server/animate,
+//  server/timeout, and server/background. You can also configure
+//  other abitrary properties.
+
+static void
+engine_configure (server_t *server, const char *path, const char *value)
+{
+    if (server) {
+        s_server_t *self = (s_server_t *) server;
+        zconfig_put (self->config, path, value);
+    }
+}
+
 //  Pedantic compilers don't like unused functions, so we call the whole
 //  API, passing null references. It's nasty and horrid and sufficient.
 
@@ -319,11 +355,13 @@ s_satisfy_pedantic_compilers (void)
     engine_set_exception (NULL, 0);
     engine_set_wakeup_event (NULL, 0, 0);
     engine_send_event (NULL, 0);
+    engine_broadcast_event (NULL, NULL, 0);
     engine_handle_socket (NULL, 0, NULL);
     engine_set_monitor (NULL, 0, NULL);
     engine_log (NULL, NULL);
     engine_server_log (NULL, NULL);
     engine_set_log_prefix (NULL, NULL);
+    engine_configure (NULL, NULL, NULL);
 }
 
 
@@ -376,7 +414,7 @@ s_client_new (s_server_t *server, zframe_t *routing_id)
     self->routing_id = zframe_dup (routing_id);
     self->mailbox = zlist_new ();
     self->unique_id = server->client_id++;
-    engine_set_log_prefix (&self->client, "");
+    engine_set_log_prefix (&self->client, server->log_prefix);
 
     self->client.server = (server_t *) server;
     self->client.reply = zpipes_msg_new (0);
@@ -1585,8 +1623,9 @@ zpipes_server (zsock_t *pipe, void *args)
     //  Initialize
     s_server_t *self = s_server_new (pipe);
     assert (self);
-    zlog_notice (self->log, "starting zpipes_server service");
     zsock_signal (pipe, 0);
+    //  Actor argument may be a string used for logging
+    self->log_prefix = args? (char *) args: "";
 
     //  Set-up server monitor to watch for config file changes
     engine_set_monitor ((server_t *) self, 1000, s_watch_server_config);
@@ -1598,6 +1637,5 @@ zpipes_server (zsock_t *pipe, void *args)
     zloop_start (self->loop);
 
     //  Reactor has ended
-    zlog_notice (self->log, "terminating zpipes_server service");
     s_server_destroy (&self);
 }

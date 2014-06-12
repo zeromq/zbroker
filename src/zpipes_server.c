@@ -146,9 +146,10 @@ server_join_cluster (server_t *self)
         zyre_set_name (self->zyre, value);
     
     value = zconfig_resolve (self->config, "zyre/interface", NULL);
-    if (value)
+    if (value) {
+        zlog_info (self->log, "forcing cluster interface to %s", value);
         zyre_set_interface (self->zyre, value);
-    
+    }
     if (zyre_start (self->zyre)) {
         zlog_warning (self->log, "clustering not working");
         return -1;              //  Can't join cluster

@@ -640,7 +640,7 @@ zpipes_msg_recv (void *input)
         if (!routing_id || !zmsg_next (msg))
             return NULL;        //  Malformed or empty
     }
-    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
+    zpipes_msg_t *zpipes_msg = zpipes_msg_decode (&msg);
     if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
         zpipes_msg->routing_id = routing_id;
 
@@ -665,7 +665,7 @@ zpipes_msg_recv_nowait (void *input)
         if (!routing_id || !zmsg_next (msg))
             return NULL;        //  Malformed or empty
     }
-    zpipes_msg_t * zpipes_msg = zpipes_msg_decode (&msg);
+    zpipes_msg_t *zpipes_msg = zpipes_msg_decode (&msg);
     if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
         zpipes_msg->routing_id = routing_id;
 

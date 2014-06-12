@@ -438,6 +438,9 @@ CZMQ_EXPORT int
     zpipes_msg_test (bool verbose);
 //  @end
 
+//  For backwards compatibility with old codecs
+#define zpipes_msg_dump     zpipes_msg_print
+
 #ifdef __cplusplus
 }
 #endif

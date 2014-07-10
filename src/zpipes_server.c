@@ -147,7 +147,7 @@ server_join_cluster (server_t *self)
     
     value = zconfig_resolve (self->config, "zyre/interface", NULL);
     if (value) {
-        zlog_info (self->log, "forcing cluster interface to %s", value);
+        zsys_info ("forcing cluster interface to %s", value);
         zyre_set_interface (self->zyre, value);
     }
     if (zyre_start (self->zyre)) {

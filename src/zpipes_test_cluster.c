@@ -24,19 +24,14 @@ int main (void)
     char *animate = "0";
 
     zactor_t *green = zactor_new (zpipes_server, NULL);
-    //  BIND message always replies with port number
     zstr_sendx (green, "BIND", "ipc://@/zpipes/green", NULL);
-    char *reply = zstr_recv (green);
-    assert (streq (reply, "0"));
-    free (reply);
-    
     zstr_sendx (green, "SET", "server/animate", animate, NULL);
     zstr_sendx (green, "SET", "zyre/interval", "100", NULL);
     zstr_sendx (green, "SET", "zyre/nodeid", "green", NULL);
     
     //  JOIN CLUSTER message always replies with OK/SNAFU
     zstr_sendx (green, "JOIN CLUSTER", NULL);
-    reply = zstr_recv (green);
+    char *reply = zstr_recv (green);
 
     //  If the machine has no usable broadcast interface, the JOIN CLUSTER
     //  command will fail, and then there's no point in continuing...
@@ -49,12 +44,7 @@ int main (void)
     free (reply);
 
     zactor_t *orange = zactor_new (zpipes_server, NULL);
-    //  BIND message always replies with port number
     zstr_sendx (orange, "BIND", "ipc://@/zpipes/orange", NULL);
-    reply = zstr_recv (orange);
-    assert (streq (reply, "0"));
-    free (reply);
-    
     zstr_sendx (orange, "SET", "server/animate", animate, NULL);
     zstr_sendx (orange, "SET", "zyre/interval", "100", NULL);
     zstr_sendx (orange, "SET", "zyre/nodeid", "orange", NULL);

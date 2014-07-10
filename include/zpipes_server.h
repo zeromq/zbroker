@@ -29,11 +29,11 @@ extern "C" {
 
 //  @interface
 //  This is zpipes_server, implemented as a CZMQ zactor task
-void
+CZMQ_EXPORT void
     zpipes_server (zsock_t *pipe, void *args);
 
 //  Self test of this class
-void
+CZMQ_EXPORT void
     zpipes_server_test (bool verbose);
 //  @end
 

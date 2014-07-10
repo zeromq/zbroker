@@ -32,7 +32,6 @@ typedef struct _client_t client_t;
 struct _server_t {
     //  These properties must always be present in the server_t
     //  and are set by the generated engine; do not modify them!
-    zlog_t *log;                //  For any logging needed
     zconfig_t *config;          //  Current loaded configuration
     
     //  These properties are specific for this application
@@ -78,7 +77,6 @@ struct _client_t {
 #include "zpipes_server_engine.h"
 
 //  This method handles all traffic from other server nodes
-
 static int
     zyre_handler (zloop_t *loop, zsock_t *reader, void *argument);
 static int
@@ -93,6 +91,7 @@ static void
 static int
 server_initialize (server_t *self)
 {
+    zsys_notice ("starting zpipes service");
     self->pipes = zhash_new ();
     return 0;
 }
@@ -102,6 +101,7 @@ server_initialize (server_t *self)
 static void
 server_terminate (server_t *self)
 {
+    zsys_notice ("terminating zpipes service");
     free (self->name);
     zyre_destroy (&self->zyre);
     zhash_destroy (&self->pipes);
@@ -151,14 +151,14 @@ server_join_cluster (server_t *self)
         zyre_set_interface (self->zyre, value);
     }
     if (zyre_start (self->zyre)) {
-        zlog_warning (self->log, "clustering not working");
+        zsys_warning ("clustering not working");
         return -1;              //  Can't join cluster
     }
     zyre_join (self->zyre, "ZPIPES");
 
     //  Get Zyre public name for logging
     self->name = strdup (zyre_name (self->zyre));
-    zlog_info (self->log, "joining cluster as %s", self->name);
+    zsys_info ("joining cluster as %s", self->name);
 
     //  Set-up reader for Zyre events
     engine_handle_socket (self, zyre_socket (self->zyre), zyre_handler);
@@ -263,7 +263,7 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
 {
     assert (self);
     if (self->reader == NULL) {
-        zclock_log ("%s: attach local reader", self->name);
+        zsys_info ("%s: attach local reader", self->name);
         self->reader = reader;
         if (self->writer == NULL) {
             if (self->server->zyre) {
@@ -273,7 +273,7 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
                 zmsg_addstr (msg, "HAVE READER");
                 zmsg_addstr (msg, self->name);
                 zyre_shout (self->server->zyre, "ZPIPES", &msg);
-                zclock_log ("%s: broadcast we are now reader", self->name);
+                zsys_info ("%s: broadcast we are now reader", self->name);
             }
         }
         else
@@ -284,14 +284,14 @@ pipe_attach_local_reader (pipe_t *self, client_t *reader)
             zmsg_addstr (msg, "HAVE READER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
-            zclock_log ("%s: tell peer we are now reader", self->name);
+            zsys_info ("%s: tell peer we are now reader", self->name);
         }
         else
             engine_send_event (self->writer, have_reader_event);
 
         return 0;
     }
-    zclock_log ("%s: pipe already has reader: ignored", self->name);
+    zsys_info ("%s: pipe already has reader: ignored", self->name);
     return -1;                  //  Pipe already has reader
 }
 
@@ -314,7 +314,7 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote, bool unicast)
         //  This is how we indicate a remote reader
         self->reader = REMOTE_NODE;
         self->remote = strdup (remote);
-        zclock_log ("%s: attach remote reader", self->name);
+        zsys_info ("%s: attach remote reader", self->name);
 
         if (self->writer && !unicast) {
             //  Tell remote node we're acting as writer, if we got a
@@ -324,14 +324,14 @@ pipe_attach_remote_reader (pipe_t *self, const char *remote, bool unicast)
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
-            zclock_log ("%s: tell peer we are now writer", self->name);
+            zsys_info ("%s: tell peer we are now writer", self->name);
         }
         //  Writer must be local at this stage; wake it up so it can
         //  ship off its waiting data
         engine_send_event (self->writer, have_reader_event);
         return 0;
     }
-    zclock_log ("%s: pipe already has reader: ignored", self->name);
+    zsys_info ("%s: pipe already has reader: ignored", self->name);
     return -1;                  //  Pipe already has reader
 }
 
@@ -343,7 +343,7 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
 {
     assert (self);
     if (self->writer == NULL) {
-        zclock_log ("%s: attach local writer", self->name);
+        zsys_info ("%s: attach local writer", self->name);
         self->writer = writer;
         if (self->reader == NULL) {
             if (self->server->zyre) {
@@ -353,7 +353,7 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
                 zmsg_addstr (msg, "HAVE WRITER");
                 zmsg_addstr (msg, self->name);
                 zyre_shout (self->server->zyre, "ZPIPES", &msg);
-                zclock_log ("%s: broadcast we are now writer", self->name);
+                zsys_info ("%s: broadcast we are now writer", self->name);
             }
         }
         else
@@ -364,14 +364,14 @@ pipe_attach_local_writer (pipe_t *self, client_t *writer)
             zmsg_addstr (msg, "HAVE WRITER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
-            zclock_log ("%s: tell peer we are now writer", self->name);
+            zsys_info ("%s: tell peer we are now writer", self->name);
         }
         else
             engine_send_event (self->reader, have_writer_event);
         
         return 0;
     }
-    zclock_log ("%s: pipe already has writer: ignored", self->name);
+    zsys_info ("%s: pipe already has writer: ignored", self->name);
     return -1;
 }
 
@@ -394,7 +394,7 @@ pipe_attach_remote_writer (pipe_t *self, const char *remote, bool unicast)
         //  This is how we indicate a remote writer
         self->writer = REMOTE_NODE;
         self->remote = strdup (remote);
-        zclock_log ("%s: attach remote writer", self->name);
+        zsys_info ("%s: attach remote writer", self->name);
 
         if (self->reader && !unicast) {
             //  Tell remote node we're acting as reader, if we got a
@@ -404,11 +404,11 @@ pipe_attach_remote_writer (pipe_t *self, const char *remote, bool unicast)
             zmsg_addstr (msg, "HAVE READER");
             zmsg_addstr (msg, self->name);
             zyre_whisper (self->server->zyre, self->remote, &msg);
-            zclock_log ("%s: tell peer we are now reader", self->name);
+            zsys_info ("%s: tell peer we are now reader", self->name);
         }
         return 0;
     }
-    zclock_log ("%s: pipe already has writer: ignored", self->name);
+    zsys_info ("%s: pipe already has writer: ignored", self->name);
     return -1;
 }
 
@@ -430,7 +430,7 @@ pipe_drop_local_reader (pipe_t **self_p)
                 zmsg_addstr (msg, "DROP READER");
                 zmsg_addstr (msg, self->name);
                 zyre_whisper (self->server->zyre, self->remote, &msg);
-                zclock_log ("%s: tell peer we stopped being reader", self->name);
+                zsys_info ("%s: tell peer we stopped being reader", self->name);
             }
             else {
                 engine_send_event (self->writer, reader_dropped_event);
@@ -459,7 +459,7 @@ pipe_drop_local_writer (pipe_t **self_p)
                 zmsg_addstr (msg, "DROP WRITER");
                 zmsg_addstr (msg, self->name);
                 zyre_whisper (self->server->zyre, self->remote, &msg);
-                zclock_log ("%s: tell peer we stopped being writer", self->name);
+                zsys_info ("%s: tell peer we stopped being writer", self->name);
             }
             else {
                 engine_send_event (self->reader, writer_dropped_event);
@@ -540,7 +540,7 @@ pipe_send_data (pipe_t *self, zchunk_t **chunk_p)
     }
 }
 
-//  Callback when we remove group from container
+//  Callback when we remove pipe from container
 
 static void
 s_delete_pipe (void *argument)
@@ -576,7 +576,7 @@ open_pipe_writer (client_t *self)
 {
     assert (self->pipe);
     if (pipe_attach_local_writer (self->pipe, self) == 0) {
-        engine_log (self, "open local writer");
+        zsys_info ("open local writer");
         engine_set_next_event (self, ok_event);
     }
     else
@@ -593,7 +593,7 @@ open_pipe_reader (client_t *self)
 {
     assert (self->pipe);
     if (pipe_attach_local_reader (self->pipe, self) == 0) {
-        engine_log (self, "open local reader");
+        zsys_info ("open local reader");
         engine_set_next_event (self, ok_event);
     }
     else
@@ -609,7 +609,7 @@ static void
 close_pipe_writer (client_t *self)
 {
     pipe_drop_local_writer (&self->pipe);
-    engine_log (self, "close local writer");
+    zsys_info ("close local writer");
 }
 
 
@@ -621,7 +621,7 @@ static void
 close_pipe_reader (client_t *self)
 {
     pipe_drop_local_reader (&self->pipe);
-    engine_log (self, "close local reader");
+    zsys_info ("close local reader");
 }
 
 
@@ -655,7 +655,7 @@ pass_data_to_reader (client_t *self)
 {
     assert (self->pipe);
     zchunk_t *chunk = zpipes_msg_get_chunk (self->request);
-    engine_log (self, "write %d bytes", (int) zchunk_size (chunk));
+    zsys_info ("write %d bytes", (int) zchunk_size (chunk));
     pipe_send_data (self->pipe, &chunk);
 }
 
@@ -692,7 +692,7 @@ process_read_request (client_t *self)
 static void
 collect_data_to_send (client_t *self)
 {
-    engine_log (self, "read %d bytes", (int) zpipes_msg_size (self->request));
+    zsys_info ("read %d bytes", (int) zpipes_msg_size (self->request));
     //  Do we have enough data to satisfy the read request?
     size_t required = zpipes_msg_size (self->request);
     
@@ -744,8 +744,8 @@ server_process_cluster_command (
 {
     char *request = zmsg_popstr (msg);
     char *pipename = zmsg_popstr (msg);
-    engine_server_log (self, "peer=%s command=%s pipe=%s unicast=%d",
-                       peer_name, request, pipename, unicast);
+    zsys_info ("peer=%s command=%s pipe=%s unicast=%d",
+                peer_name, request, pipename, unicast);
 
     //  Lookup or create pipe
     //  TODO: remote pipes need cleaning up with some timeout
@@ -764,13 +764,11 @@ server_process_cluster_command (
         zframe_t *frame = zmsg_pop (msg);
         zchunk_t *chunk = zchunk_new (zframe_data (frame), zframe_size (frame));
         if (pipe->writer == REMOTE_NODE && pipe->reader) {
-            engine_server_log (self, "send %d bytes to pipe",
-                              (int) zchunk_size (chunk));
+            zsys_info ("send %d bytes to pipe", (int) zchunk_size (chunk));
             pipe_send_data (pipe, &chunk); 
         }
         else
-            engine_server_log (self, "discard %d bytes, unroutable",
-                              (int) zchunk_size (chunk));
+            zsys_info ("discard %d bytes, unroutable", (int) zchunk_size (chunk));
             
         zframe_destroy (&frame);
         zchunk_destroy (&chunk);
@@ -782,7 +780,7 @@ server_process_cluster_command (
     if (streq (request, "DROP WRITER"))
         pipe_drop_remote_writer (&pipe, peer_id);
     else
-        zlog_warning (self->log, "bad request %s from %s", request, peer_name);
+        zsys_warning ("bad request %s from %s", request, peer_name);
 
     zstr_free (&pipename);
     zstr_free (&request);
@@ -796,16 +794,15 @@ zyre_handler (zloop_t *loop, zsock_t *reader, void *argument)
     if (!msg)
         return -1;              //  Interrupted
 
-    zmsg_dump (msg);
     char *command = zmsg_popstr (msg);
     char *peer_id = zmsg_popstr (msg);
     char *peer_name = zmsg_popstr (msg);
 
     if (streq (command, "ENTER"))
-        zlog_info (self->log, "ZPIPES server appeared at %s", peer_name);
+        zsys_info ("ZPIPES server appeared at %s", peer_name);
     else
     if (streq (command, "EXIT"))
-        zlog_info (self->log, "ZPIPES server vanished from %s", peer_name);
+        zsys_info ("ZPIPES server vanished from %s", peer_name);
     else
     if (streq (command, "SHOUT")) {
         char *group = zmsg_popstr (msg);
@@ -839,10 +836,8 @@ s_expect_reply (void *dealer, int message_id)
     }
     int rc = zpipes_msg_id (reply) == message_id? 0: -1;
     if (rc)
-        printf ("W: expected %d, got %d/%s\n",
-                message_id,
-                zpipes_msg_id (reply),
-                zpipes_msg_command (reply));
+        zsys_warning ("expected %d, got %d/%s\n", message_id,
+            zpipes_msg_id (reply), zpipes_msg_command (reply));
     zpipes_msg_destroy (&reply);
     return rc;
 }
@@ -857,9 +852,6 @@ zpipes_server_test (bool verbose)
     zactor_t *server = zactor_new (zpipes_server, NULL);
     zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
     zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
-    char *reply = zstr_recv (server);
-    assert (streq (reply, "0"));
-    free (reply);
 
     zsock_t *writer = zsock_new (ZMQ_DEALER);
     assert (writer);

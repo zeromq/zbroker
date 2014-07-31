@@ -127,30 +127,93 @@ server_method (server_t *self, const char *method, zmsg_t *msg)
 }
 
 //  Join local cluster, uses Zyre for clustering
+// #   Zyre cluster configuration
+// zyre
+//     name = zbroker      #   Default = random name
+//     discovery = beacon  #   beacon | gossip
+// 
+//     #   Beacon discovery uses UDP broadcasts (CZMQ zbeacon class)
+//     beacon
+//         interface = auto    #   Beacon network interface, default = auto
+//         interval = 250      #   Beacon interval, default = 1000 msec
+//         port = 5670         #   Beacon UDP port, default = 5670
+// 
+//     #   Gossip discovery uses loosely-connected TCP (CZMQ zgossip),
+//     #   must bind or connect to
+//     gossip
+//         #   The node can bind to zero or more interface:ports
+//         bind = endpoint1
+//         bind = endpoint2
+//         bind = endpoint3
+//         #   The node can connect to zero or more gossip peers
+//         connect = tcp://whatever
+//         connect = tcp://somethingelse
 
 static int
 server_join_cluster (server_t *self)
 {
-    self->zyre = zyre_new ();
+    self->zyre = zyre_new (zconfig_resolve (self->config, "zyre/name", NULL));
     
     //  Get Zyre configuration properties
-    char *value = zconfig_resolve (self->config, "zyre/interval", NULL);
-    if (value)
-        zyre_set_interval (self->zyre, atoi (value));
-    
-    value = zconfig_resolve (self->config, "zyre/port", NULL);
-    if (value)
-        zyre_set_port (self->zyre, atoi (value));
-    
-    value = zconfig_resolve (self->config, "zyre/name", NULL);
-    if (value)
-        zyre_set_name (self->zyre, value);
-    
-    value = zconfig_resolve (self->config, "zyre/interface", NULL);
-    if (value) {
-        zsys_info ("forcing cluster interface to %s", value);
-        zyre_set_interface (self->zyre, value);
+    char *value = zconfig_resolve (self->config, "zyre/discovery", "beacon");
+    if (streq (value, "beacon")) {
+        //  Set-up UDP beacon discovery
+        zsys_info ("using UDP beacon discovery service");
+        zconfig_t *section = zconfig_locate (self->config, "zyre/beacon");
+        value = zconfig_resolve (section, "interface", "auto");
+        if (strneq (value, "auto")) {
+            zsys_info ("forcing cluster interface to %s", value);
+            zyre_set_interface (self->zyre, value);
+        }
+        value = zconfig_resolve (section, "interval", NULL);
+        if (value)
+            zyre_set_interval (self->zyre, atoi (value));
+
+        value = zconfig_resolve (section, "port", NULL);
+        if (value) {
+            zsys_info ("UDP beaconing on port %s", value);
+            zyre_set_port (self->zyre, atoi (value));
+        }
     }
+    else
+    if (streq (value, "gossip")) {
+        //  Set-up TCP gossip discovery
+        zsys_info ("using TCP gossip discovery service");
+        zconfig_t *section = zconfig_locate (self->config, "zyre/gossip");
+        zconfig_t *entry = zconfig_child (section);
+        while (entry) {
+            char *name = zconfig_name (entry);
+            char *value = zconfig_value (entry);
+            if (streq (name, "endpoint")) {
+                zsys_info ("Zyre node endpoint=%s", value);
+                zyre_set_endpoint (self->zyre, "%s", value);
+            }
+            else
+            if (streq (name, "announce")) {
+                zsys_info ("Zyre node announce=%s", value);
+                zyre_set_announce (self->zyre, "%s", value);
+            }
+            else
+            if (streq (name, "bind")) {
+                zsys_info ("gossip service bind to %s", value);
+                zyre_gossip_bind (self->zyre, "%s", value);
+            }
+            else
+            if (streq (name, "connect")) {
+                zsys_info ("gossip service connect to %s", value);
+                zyre_gossip_connect (self->zyre, "%s", value);
+            }
+            else
+                zsys_warning ("unknown zyre/gossip entry '%s' ignored", name);
+            entry = zconfig_next (entry);
+        }
+    }
+    else {
+        zsys_error ("bad zyre/discovery=%s (use beacon|gossip)", value);
+        assert (0);
+    }
+    
+    
     if (zyre_start (self->zyre)) {
         zsys_warning ("clustering not working");
         return -1;              //  Can't join cluster

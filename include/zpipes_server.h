@@ -28,7 +28,25 @@ extern "C" {
 #endif
 
 //  @interface
-//  This is zpipes_server, implemented as a CZMQ zactor task
+//  To work with zpipes_server, use the CZMQ zactor API:
+//
+//  Create new zpipes_server instance, passing logging prefix:
+//      zactor_t *zpipes_server = zactor_new (zpipes_server, "myname");
+//  
+//  Destroy zpipes_server instance
+//      zactor_destroy (&zpipes_server);
+//  
+//  Send zmsg instance message to zpipes_server instance:
+//      zactor_send (zpipes_server, &msg);
+//  
+//  Send command to zpipes_server instance:
+//      zstr_sendx (zpipes_server, "COMMAND", "ARG1", "ARG2", NULL);
+//  
+//  Receive zmsg message from zpipes_server instance:
+//      zmsg_t *msg = zactor_recv (zpipes_server);
+//
+//  This is the zpipes_server constructor as a zactor_fn:
+//
 CZMQ_EXPORT void
     zpipes_server (zsock_t *pipe, void *args);
 

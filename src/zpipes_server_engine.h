@@ -1368,6 +1368,12 @@ s_server_new (zsock_t *pipe)
 
     self->pipe = pipe;
     self->router = zsock_new (ZMQ_ROUTER);
+    //  By default the socket will discard outgoing messages above the
+    //  HWM of 1,000. This isn't helpful for high-volume streaming. We
+    //  will use a unbounded queue here. If applications need to guard
+    //  against queue overflow, they should use a credit-based flow
+    //  control scheme.
+    zsock_set_unbounded (self->router);
     self->clients = zhash_new ();
     self->config = zconfig_new ("root", NULL);
     self->loop = zloop_new ();
@@ -1376,6 +1382,7 @@ s_server_new (zsock_t *pipe)
     s_server_config_self (self);
 
     //  Initialize application server context
+    self->server.pipe = self->pipe;
     self->server.config = self->config;
     server_initialize (&self->server);
 
@@ -1418,8 +1425,8 @@ s_server_apply_config (s_server_t *self)
         else
         if (streq (zconfig_name (section), "bind")) {
             char *endpoint = zconfig_resolve (section, "endpoint", "?");
-            int rc = zsock_bind (self->router, "%s", endpoint);
-            assert (rc != -1);
+            if (zsock_bind (self->router, "%s", endpoint) == -1)
+                zsys_warning ("failed to bind to %s", endpoint);
         }
         section = zconfig_next (section);
     }
@@ -1447,13 +1454,16 @@ s_server_api_message (zloop_t *loop, zsock_t *reader, void *argument)
         //  Bind to a specified endpoint, which may use an ephemeral port
         char *endpoint = zmsg_popstr (msg);
         self->port = zsock_bind (self->router, "%s", endpoint);
-        assert (self->port != -1);
+        if (self->port == -1)
+            zsys_warning ("failed to bind to %s", endpoint);
         free (endpoint);
     }
     else
-    if (streq (method, "PORT"))
-        //  Return port number from the last bind, if any
+    if (streq (method, "PORT")) {
+        //  Return PORT + port number from the last bind, if any
+        zstr_sendm (self->pipe, "PORT");
         zstr_sendf (self->pipe, "%d", self->port);
+    }
     else
     if (streq (method, "CONFIGURE")) {
         char *config_file = zmsg_popstr (msg);

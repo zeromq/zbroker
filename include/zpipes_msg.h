@@ -121,16 +121,13 @@ CZMQ_EXPORT void
     zpipes_msg_destroy (zpipes_msg_t **self_p);
 
 //  Parse a zpipes_msg from zmsg_t. Returns a new object, or NULL if
-//  the message could not be parsed, or was NULL. If the socket type is
-//  ZMQ_ROUTER, then parses the first frame as a routing_id. Destroys msg
-//  and nullifies the msg refernce.
+//  the message could not be parsed, or was NULL. Destroys msg and 
+//  nullifies the msg reference.
 CZMQ_EXPORT zpipes_msg_t *
     zpipes_msg_decode (zmsg_t **msg_p);
 
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
 //  object or NULL if error. Use when not in control of sending the message.
-//  If the socket_type is ZMQ_ROUTER, then stores the routing_id as the
-//  first frame of the resulting message.
 CZMQ_EXPORT zmsg_t *
     zpipes_msg_encode (zpipes_msg_t **self_p);
 
@@ -437,6 +434,9 @@ CZMQ_EXPORT void
 CZMQ_EXPORT int
     zpipes_msg_test (bool verbose);
 //  @end
+
+//  For backwards compatibility with old codecs
+#define zpipes_msg_dump     zpipes_msg_print
 
 #ifdef __cplusplus
 }

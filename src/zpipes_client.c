@@ -217,9 +217,6 @@ zpipes_client_test (bool verbose)
     zactor_t *server = zactor_new (zpipes_server, NULL);
     zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
     zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
-    char *reply = zstr_recv (server);
-    assert (streq (reply, "0"));
-    free (reply);
     
     zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");
     zpipes_client_t *writer = zpipes_client_new ("local", ">test pipe");

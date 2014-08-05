@@ -219,9 +219,8 @@ zpipes_msg_destroy (zpipes_msg_t **self_p)
 
 //  --------------------------------------------------------------------------
 //  Parse a zpipes_msg from zmsg_t. Returns a new object, or NULL if
-//  the message could not be parsed, or was NULL. If the socket type is
-//  ZMQ_ROUTER, then parses the first frame as a routing_id. Destroys msg
-//  and nullifies the msg refernce.
+//  the message could not be parsed, or was NULL. Destroys msg and 
+//  nullifies the msg reference.
 
 zpipes_msg_t *
 zpipes_msg_decode (zmsg_t **msg_p)
@@ -348,7 +347,7 @@ zpipes_msg_decode (zmsg_t **msg_p)
 
     //  Error returns
     malformed:
-        printf ("E: malformed message '%d'\n", self->id);
+        zsys_error ("malformed message '%d'\n", self->id);
     empty:
         zframe_destroy (&frame);
         zmsg_destroy (msg_p);
@@ -360,8 +359,6 @@ zpipes_msg_decode (zmsg_t **msg_p)
 //  --------------------------------------------------------------------------
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
 //  object or NULL if error. Use when not in control of sending the message.
-//  If the socket_type is ZMQ_ROUTER, then stores the routing_id as the
-//  first frame of the resulting message.
 
 zmsg_t *
 zpipes_msg_encode (zpipes_msg_t **self_p)
@@ -480,7 +477,7 @@ zpipes_msg_encode (zpipes_msg_t **self_p)
             break;
             
         default:
-            printf ("E: bad message type '%d', not sent\n", self->id);
+            zsys_error ("bad message type '%d', not sent\n", self->id);
             //  No recovery, this is a fatal application error
             assert (false);
     }
@@ -641,7 +638,7 @@ zpipes_msg_recv (void *input)
             return NULL;        //  Malformed or empty
     }
     zpipes_msg_t *zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
+    if (zpipes_msg && zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
         zpipes_msg->routing_id = routing_id;
 
     return zpipes_msg;
@@ -666,7 +663,7 @@ zpipes_msg_recv_nowait (void *input)
             return NULL;        //  Malformed or empty
     }
     zpipes_msg_t *zpipes_msg = zpipes_msg_decode (&msg);
-    if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
+    if (zpipes_msg && zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER)
         zpipes_msg->routing_id = routing_id;
 
     return zpipes_msg;
@@ -1359,7 +1356,6 @@ zpipes_msg_dup (zpipes_msg_t *self)
 }
 
 
-
 //  --------------------------------------------------------------------------
 //  Print contents of message to stdout
 
@@ -1369,130 +1365,120 @@ zpipes_msg_print (zpipes_msg_t *self)
     assert (self);
     switch (self->id) {
         case ZPIPES_MSG_INPUT:
-            puts ("INPUT:");
+            zsys_debug ("ZPIPES_MSG_INPUT:");
             if (self->pipename)
-                printf ("    pipename='%s'\n", self->pipename);
+                zsys_debug ("    pipename='%s'", self->pipename);
             else
-                printf ("    pipename=\n");
+                zsys_debug ("    pipename=");
             break;
             
         case ZPIPES_MSG_INPUT_OK:
-            puts ("INPUT_OK:");
+            zsys_debug ("ZPIPES_MSG_INPUT_OK:");
             break;
             
         case ZPIPES_MSG_INPUT_FAILED:
-            puts ("INPUT_FAILED:");
+            zsys_debug ("ZPIPES_MSG_INPUT_FAILED:");
             if (self->reason)
-                printf ("    reason='%s'\n", self->reason);
+                zsys_debug ("    reason='%s'", self->reason);
             else
-                printf ("    reason=\n");
+                zsys_debug ("    reason=");
             break;
             
         case ZPIPES_MSG_OUTPUT:
-            puts ("OUTPUT:");
+            zsys_debug ("ZPIPES_MSG_OUTPUT:");
             if (self->pipename)
-                printf ("    pipename='%s'\n", self->pipename);
+                zsys_debug ("    pipename='%s'", self->pipename);
             else
-                printf ("    pipename=\n");
+                zsys_debug ("    pipename=");
             break;
             
         case ZPIPES_MSG_OUTPUT_OK:
-            puts ("OUTPUT_OK:");
+            zsys_debug ("ZPIPES_MSG_OUTPUT_OK:");
             break;
             
         case ZPIPES_MSG_OUTPUT_FAILED:
-            puts ("OUTPUT_FAILED:");
+            zsys_debug ("ZPIPES_MSG_OUTPUT_FAILED:");
             if (self->reason)
-                printf ("    reason='%s'\n", self->reason);
+                zsys_debug ("    reason='%s'", self->reason);
             else
-                printf ("    reason=\n");
+                zsys_debug ("    reason=");
             break;
             
         case ZPIPES_MSG_READ:
-            puts ("READ:");
-            printf ("    size=%ld\n", (long) self->size);
-            printf ("    timeout=%ld\n", (long) self->timeout);
+            zsys_debug ("ZPIPES_MSG_READ:");
+            zsys_debug ("    size=%ld", (long) self->size);
+            zsys_debug ("    timeout=%ld", (long) self->timeout);
             break;
             
         case ZPIPES_MSG_READ_OK:
-            puts ("READ_OK:");
-            printf ("    chunk={\n");
-            if (self->chunk)
-                zchunk_print (self->chunk);
-            else
-                printf ("(NULL)\n");
-            printf ("    }\n");
+            zsys_debug ("ZPIPES_MSG_READ_OK:");
+            zsys_debug ("    chunk=[ ... ]");
             break;
             
         case ZPIPES_MSG_READ_END:
-            puts ("READ_END:");
+            zsys_debug ("ZPIPES_MSG_READ_END:");
             break;
             
         case ZPIPES_MSG_READ_TIMEOUT:
-            puts ("READ_TIMEOUT:");
+            zsys_debug ("ZPIPES_MSG_READ_TIMEOUT:");
             break;
             
         case ZPIPES_MSG_READ_FAILED:
-            puts ("READ_FAILED:");
+            zsys_debug ("ZPIPES_MSG_READ_FAILED:");
             if (self->reason)
-                printf ("    reason='%s'\n", self->reason);
+                zsys_debug ("    reason='%s'", self->reason);
             else
-                printf ("    reason=\n");
+                zsys_debug ("    reason=");
             break;
             
         case ZPIPES_MSG_WRITE:
-            puts ("WRITE:");
-            printf ("    chunk={\n");
-            if (self->chunk)
-                zchunk_print (self->chunk);
-            else
-                printf ("(NULL)\n");
-            printf ("    }\n");
-            printf ("    timeout=%ld\n", (long) self->timeout);
+            zsys_debug ("ZPIPES_MSG_WRITE:");
+            zsys_debug ("    chunk=[ ... ]");
+            zsys_debug ("    timeout=%ld", (long) self->timeout);
             break;
             
         case ZPIPES_MSG_WRITE_OK:
-            puts ("WRITE_OK:");
+            zsys_debug ("ZPIPES_MSG_WRITE_OK:");
             break;
             
         case ZPIPES_MSG_WRITE_TIMEOUT:
-            puts ("WRITE_TIMEOUT:");
+            zsys_debug ("ZPIPES_MSG_WRITE_TIMEOUT:");
             break;
             
         case ZPIPES_MSG_WRITE_FAILED:
-            puts ("WRITE_FAILED:");
+            zsys_debug ("ZPIPES_MSG_WRITE_FAILED:");
             if (self->reason)
-                printf ("    reason='%s'\n", self->reason);
+                zsys_debug ("    reason='%s'", self->reason);
             else
-                printf ("    reason=\n");
+                zsys_debug ("    reason=");
             break;
             
         case ZPIPES_MSG_CLOSE:
-            puts ("CLOSE:");
+            zsys_debug ("ZPIPES_MSG_CLOSE:");
             break;
             
         case ZPIPES_MSG_CLOSE_OK:
-            puts ("CLOSE_OK:");
+            zsys_debug ("ZPIPES_MSG_CLOSE_OK:");
             break;
             
         case ZPIPES_MSG_CLOSE_FAILED:
-            puts ("CLOSE_FAILED:");
+            zsys_debug ("ZPIPES_MSG_CLOSE_FAILED:");
             if (self->reason)
-                printf ("    reason='%s'\n", self->reason);
+                zsys_debug ("    reason='%s'", self->reason);
             else
-                printf ("    reason=\n");
+                zsys_debug ("    reason=");
             break;
             
         case ZPIPES_MSG_PING:
-            puts ("PING:");
+            zsys_debug ("ZPIPES_MSG_PING:");
             break;
             
         case ZPIPES_MSG_PING_OK:
-            puts ("PING_OK:");
+            zsys_debug ("ZPIPES_MSG_PING_OK:");
             break;
             
         case ZPIPES_MSG_INVALID:
-            puts ("INVALID:");
+            zsys_debug ("ZPIPES_MSG_INVALID:");
             break;
             
     }

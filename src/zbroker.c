@@ -33,16 +33,20 @@ int main (int argc, char *argv [])
     const char *config_file = "zbroker.cfg";
     if (argc > 1)
         config_file = argv [1];
+
+    //  Send logging to system facility as well as stdout
+    zsys_init ();
+    zsys_set_logsystem (true);
     
     //  Load config file for our own use here
-    zclock_log ("I: starting zpipes broker using config in '%s'", config_file);
+    zsys_info ("starting zpipes broker using config in '%s'", config_file);
     zconfig_t *config = zconfig_load (config_file);
     if (config) {
         //  Do we want to run broker in the background?
         int as_daemon = atoi (zconfig_resolve (config, "server/background", "0"));
         const char *workdir = zconfig_resolve (config, "server/workdir", ".");
         if (as_daemon) {
-            zclock_log ("I: broker switching to background process...");
+            zsys_info ("broker switching to background process...");
             if (zsys_daemonize (workdir))
                 return -1;
         }
@@ -56,7 +60,7 @@ int main (int argc, char *argv [])
         zconfig_destroy (&config);
     }
     else {
-        zclock_log ("E: cannot load config file '%s'", config_file);
+        zsys_error ("cannot load config file '%s'\n", config_file);
         return 1;
     }
     zactor_t *server = zactor_new (zpipes_server, NULL);
@@ -65,7 +69,7 @@ int main (int argc, char *argv [])
     
     char *reply = zstr_recv (server);
     if (reply && strneq (reply, "OK"))
-        zclock_log ("W: no UDP discovery, cannot join cluster");
+        zsys_warning ("no UDP discovery, cannot join cluster");
     free (reply);
     
     //  Accept and print any message back from server

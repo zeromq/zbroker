@@ -113,325 +113,325 @@ typedef struct _zpipes_msg_t zpipes_msg_t;
 
 //  @interface
 //  Create a new zpipes_msg
-CZMQ_EXPORT zpipes_msg_t *
+zpipes_msg_t *
     zpipes_msg_new (int id);
 
 //  Destroy the zpipes_msg
-CZMQ_EXPORT void
+void
     zpipes_msg_destroy (zpipes_msg_t **self_p);
 
 //  Parse a zpipes_msg from zmsg_t. Returns a new object, or NULL if
 //  the message could not be parsed, or was NULL. Destroys msg and 
 //  nullifies the msg reference.
-CZMQ_EXPORT zpipes_msg_t *
+zpipes_msg_t *
     zpipes_msg_decode (zmsg_t **msg_p);
 
 //  Encode zpipes_msg into zmsg and destroy it. Returns a newly created
 //  object or NULL if error. Use when not in control of sending the message.
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode (zpipes_msg_t **self_p);
 
 //  Receive and parse a zpipes_msg from the socket. Returns new object, 
 //  or NULL if error. Will block if there's no message waiting.
-CZMQ_EXPORT zpipes_msg_t *
+zpipes_msg_t *
     zpipes_msg_recv (void *input);
 
 //  Receive and parse a zpipes_msg from the socket. Returns new object, 
 //  or NULL either if there was no input waiting, or the recv was interrupted.
-CZMQ_EXPORT zpipes_msg_t *
+zpipes_msg_t *
     zpipes_msg_recv_nowait (void *input);
 
 //  Send the zpipes_msg to the output, and destroy it
-CZMQ_EXPORT int
+int
     zpipes_msg_send (zpipes_msg_t **self_p, void *output);
 
 //  Send the zpipes_msg to the output, and do not destroy it
-CZMQ_EXPORT int
+int
     zpipes_msg_send_again (zpipes_msg_t *self, void *output);
 
 //  Encode the INPUT 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_input (
         const char *pipename);
 
 //  Encode the INPUT_OK 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_input_ok (
 );
 
 //  Encode the INPUT_FAILED 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_input_failed (
         const char *reason);
 
 //  Encode the OUTPUT 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_output (
         const char *pipename);
 
 //  Encode the OUTPUT_OK 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_output_ok (
 );
 
 //  Encode the OUTPUT_FAILED 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_output_failed (
         const char *reason);
 
 //  Encode the READ 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_read (
         uint32_t size,
         uint32_t timeout);
 
 //  Encode the READ_OK 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_read_ok (
         zchunk_t *chunk);
 
 //  Encode the READ_END 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_read_end (
 );
 
 //  Encode the READ_TIMEOUT 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_read_timeout (
 );
 
 //  Encode the READ_FAILED 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_read_failed (
         const char *reason);
 
 //  Encode the WRITE 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_write (
         zchunk_t *chunk,
         uint32_t timeout);
 
 //  Encode the WRITE_OK 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_write_ok (
 );
 
 //  Encode the WRITE_TIMEOUT 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_write_timeout (
 );
 
 //  Encode the WRITE_FAILED 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_write_failed (
         const char *reason);
 
 //  Encode the CLOSE 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_close (
 );
 
 //  Encode the CLOSE_OK 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_close_ok (
 );
 
 //  Encode the CLOSE_FAILED 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_close_failed (
         const char *reason);
 
 //  Encode the PING 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_ping (
 );
 
 //  Encode the PING_OK 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_ping_ok (
 );
 
 //  Encode the INVALID 
-CZMQ_EXPORT zmsg_t *
+zmsg_t *
     zpipes_msg_encode_invalid (
 );
 
 
 //  Send the INPUT to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_input (void *output,
         const char *pipename);
     
 //  Send the INPUT_OK to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_input_ok (void *output);
     
 //  Send the INPUT_FAILED to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_input_failed (void *output,
         const char *reason);
     
 //  Send the OUTPUT to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_output (void *output,
         const char *pipename);
     
 //  Send the OUTPUT_OK to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_output_ok (void *output);
     
 //  Send the OUTPUT_FAILED to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_output_failed (void *output,
         const char *reason);
     
 //  Send the READ to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read (void *output,
         uint32_t size,
         uint32_t timeout);
     
 //  Send the READ_OK to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_ok (void *output,
         zchunk_t *chunk);
     
 //  Send the READ_END to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_end (void *output);
     
 //  Send the READ_TIMEOUT to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_timeout (void *output);
     
 //  Send the READ_FAILED to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_read_failed (void *output,
         const char *reason);
     
 //  Send the WRITE to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write (void *output,
         zchunk_t *chunk,
         uint32_t timeout);
     
 //  Send the WRITE_OK to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write_ok (void *output);
     
 //  Send the WRITE_TIMEOUT to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write_timeout (void *output);
     
 //  Send the WRITE_FAILED to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_write_failed (void *output,
         const char *reason);
     
 //  Send the CLOSE to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_close (void *output);
     
 //  Send the CLOSE_OK to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_close_ok (void *output);
     
 //  Send the CLOSE_FAILED to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_close_failed (void *output,
         const char *reason);
     
 //  Send the PING to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_ping (void *output);
     
 //  Send the PING_OK to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_ping_ok (void *output);
     
 //  Send the INVALID to the output in one step
 //  WARNING, this call will fail if output is of type ZMQ_ROUTER.
-CZMQ_EXPORT int
+int
     zpipes_msg_send_invalid (void *output);
     
 //  Duplicate the zpipes_msg message
-CZMQ_EXPORT zpipes_msg_t *
+zpipes_msg_t *
     zpipes_msg_dup (zpipes_msg_t *self);
 
 //  Print contents of message to stdout
-CZMQ_EXPORT void
+void
     zpipes_msg_print (zpipes_msg_t *self);
 
 //  Get/set the message routing id
-CZMQ_EXPORT zframe_t *
+zframe_t *
     zpipes_msg_routing_id (zpipes_msg_t *self);
-CZMQ_EXPORT void
+void
     zpipes_msg_set_routing_id (zpipes_msg_t *self, zframe_t *routing_id);
 
 //  Get the zpipes_msg id and printable command
-CZMQ_EXPORT int
+int
     zpipes_msg_id (zpipes_msg_t *self);
-CZMQ_EXPORT void
+void
     zpipes_msg_set_id (zpipes_msg_t *self, int id);
-CZMQ_EXPORT const char *
+const char *
     zpipes_msg_command (zpipes_msg_t *self);
 
 //  Get/set the pipename field
-CZMQ_EXPORT const char *
+const char *
     zpipes_msg_pipename (zpipes_msg_t *self);
-CZMQ_EXPORT void
+void
     zpipes_msg_set_pipename (zpipes_msg_t *self, const char *format, ...);
 
 //  Get/set the reason field
-CZMQ_EXPORT const char *
+const char *
     zpipes_msg_reason (zpipes_msg_t *self);
-CZMQ_EXPORT void
+void
     zpipes_msg_set_reason (zpipes_msg_t *self, const char *format, ...);
 
 //  Get/set the size field
-CZMQ_EXPORT uint32_t
+uint32_t
     zpipes_msg_size (zpipes_msg_t *self);
-CZMQ_EXPORT void
+void
     zpipes_msg_set_size (zpipes_msg_t *self, uint32_t size);
 
 //  Get/set the timeout field
-CZMQ_EXPORT uint32_t
+uint32_t
     zpipes_msg_timeout (zpipes_msg_t *self);
-CZMQ_EXPORT void
+void
     zpipes_msg_set_timeout (zpipes_msg_t *self, uint32_t timeout);
 
 //  Get a copy of the chunk field
-CZMQ_EXPORT zchunk_t *
+zchunk_t *
     zpipes_msg_chunk (zpipes_msg_t *self);
 //  Get the chunk field and transfer ownership to caller
-CZMQ_EXPORT zchunk_t *
+zchunk_t *
     zpipes_msg_get_chunk (zpipes_msg_t *self);
 //  Set the chunk field, transferring ownership from caller
-CZMQ_EXPORT void
+void
     zpipes_msg_set_chunk (zpipes_msg_t *self, zchunk_t **chunk_p);
 
 //  Self test of this class
-CZMQ_EXPORT int
+int
     zpipes_msg_test (bool verbose);
 //  @end
 

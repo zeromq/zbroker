@@ -18,11 +18,12 @@ libzbroker_la_SOURCES = \
 AM_CFLAGS = -g
 AM_CPPFLAGS = -I$(top_srcdir)/include
 bin_PROGRAMS = zbroker
-noinst_PROGRAMS = zbroker_selftest zpipes_test_cluster
+noinst_PROGRAMS = zbroker_selftest zpipes_test_cluster zpipes_dump
 
 zbroker_LDADD = libzbroker.la
 zbroker_selftest_LDADD = libzbroker.la
 zpipes_test_cluster_LDADD = libzbroker.la
+zpipes_dump_LDADD  = libzbroker.la
 
 libzbroker_la_LDFLAGS = -version-info @LTVER@
 

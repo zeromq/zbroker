@@ -805,21 +805,23 @@ server_process_cluster_command (
     char *request = zmsg_popstr (msg);
     char *pipename = zmsg_popstr (msg);
     zsys_info ("peer=%s command=%s pipe=%s unicast=%d",
-                peer_name, request, pipename, unicast);
+                peer_name, request, pipename? pipename: "-", unicast);
 
     //  Lookup or create pipe
     //  TODO: remote pipes need cleaning up with some timeout
-    pipe_t *pipe = (pipe_t *) zhash_lookup (self->pipes, pipename);
-    if (!pipe)
-        pipe = pipe_new (self, pipename);
-
-    if (streq (request, "HAVE WRITER"))
+    pipe_t *pipe = NULL;
+    if (pipename) {
+        pipe = (pipe_t *) zhash_lookup (self->pipes, pipename);
+        if (!pipe)
+            pipe = pipe_new (self, pipename);
+    }
+    if (pipe && streq (request, "HAVE WRITER"))
         pipe_attach_remote_writer (pipe, peer_id, unicast);
     else
-    if (streq (request, "HAVE READER"))
+    if (pipe && streq (request, "HAVE READER"))
         pipe_attach_remote_reader (pipe, peer_id, unicast);
     else
-    if (streq (request, "DATA")) {
+    if (pipe && streq (request, "DATA")) {
         //  TODO encode these commands as proper protocol
         zframe_t *frame = zmsg_pop (msg);
         zchunk_t *chunk = zchunk_new (zframe_data (frame), zframe_size (frame));
@@ -834,11 +836,14 @@ server_process_cluster_command (
         zchunk_destroy (&chunk);
     }
     else
-    if (streq (request, "DROP READER"))
+    if (pipe && streq (request, "DROP READER"))
         pipe_drop_remote_reader (&pipe, peer_id);
     else
-    if (streq (request, "DROP WRITER"))
+    if (pipe && streq (request, "DROP WRITER"))
         pipe_drop_remote_writer (&pipe, peer_id);
+    else
+    if (streq (request, "DUMP"))
+        zyre_dump (self->zyre);
     else
         zsys_warning ("bad request %s from %s", request, peer_name);
 

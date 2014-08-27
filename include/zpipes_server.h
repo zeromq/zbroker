@@ -30,19 +30,42 @@ extern "C" {
 //  @interface
 //  To work with zpipes_server, use the CZMQ zactor API:
 //
-//  Create new zpipes_server instance, passing logging prefix:
+//  Create new zpipes server instance, passing logging prefix:
+//
 //      zactor_t *zpipes_server = zactor_new (zpipes_server, "myname");
 //  
-//  Destroy zpipes_server instance
+//  Destroy zpipes server instance
+//
 //      zactor_destroy (&zpipes_server);
 //  
-//  Send zmsg instance message to zpipes_server instance:
+//  Bind zpipes server to specified endpoint. TCP endpoints may specify
+//  the port number as "*" to aquire an ephemeral port:
+//
+//      zstr_sendx (zpipes_server, "BIND", endpoint, NULL);
+//
+//  Return assigned port number, specifically when BIND was done using an
+//  an ephemeral port:
+//
+//      zstr_sendx (zpipes_server, "PORT", NULL);
+//      char *command, *port_str;
+//      zstr_recvx (zpipes_server, &command, &port_str, NULL);
+//      assert (streq (command, "PORT"));
+//
+//  Specify configuration file to load, overwriting any previous loaded
+//  configuration file or options:
+//
+//      zstr_sendx (zpipes_server, "CONFIGURE", filename, NULL);
+//
+//  Set configuration path value:
+//
+//      zstr_sendx (zpipes_server, "SET", path, value, NULL);
+//    
+//  Send zmsg_t instance to zpipes server:
+//
 //      zactor_send (zpipes_server, &msg);
-//  
-//  Send command to zpipes_server instance:
-//      zstr_sendx (zpipes_server, "COMMAND", "ARG1", "ARG2", NULL);
-//  
-//  Receive zmsg message from zpipes_server instance:
+//
+//  Receive zmsg_t instance from zpipes server:
+//
 //      zmsg_t *msg = zactor_recv (zpipes_server);
 //
 //  This is the zpipes_server constructor as a zactor_fn:

@@ -1,22 +1,32 @@
+# Travis CI script
+
 language: c
 
-#   Install dependencies first
+#   Build-check-install all subprojects
 before_script:
 - sudo apt-get install uuid-dev
 
+#   libsodium
 - git clone git://github.com/jedisct1/libsodium.git
-- git clone git://github.com/zeromq/zeromq4-x.git
-- git clone git://github.com/zeromq/czmq.git
-- git clone git://github.com/zeromq/zyre.git
+- ( cd libsodium; ./autogen.sh; ./configure; make check; sudo make install; sudo ldconfig )
+
+#   libzmtp
 - git clone git://github.com/zeromq/libzmtp.git
-- for project in libsodium zeromq4-x czmq zyre libzmtp; do
--     cd $project
--     ./autogen.sh
--     ./configure && make check
--     sudo make install
--     sudo ldconfig
--     cd ..
-- done
+- ( cd libzmtp; ./autogen.sh; ./configure; make check; sudo make install; sudo ldconfig )
+
+#   libzmq
+- git clone git://github.com/zeromq/libzmq.git
+- ( cd libzmq; ./autogen.sh; ./configure; make check; sudo make install; sudo ldconfig )
+
+#   CZMQ
+- git clone git://github.com/zeromq/czmq.git
+- ( cd czmq; ./autogen.sh; ./configure; make check; sudo make install; sudo ldconfig )
+
+#   Zyre
+- git clone git://github.com/zeromq/zyre.git
+- ( cd zyre; ./autogen.sh; ./configure; make check; sudo make install; sudo ldconfig )
 
 #   Build and check this project
-script: ./autogen.sh && ./configure && make check
+script:
+- ./autogen.sh && ./configure && make && make check
+- sudo make install

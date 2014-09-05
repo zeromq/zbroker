@@ -12,17 +12,13 @@
 
 #include "zbroker_classes.h"
 
-static void
-s_wait (char *message)
-{
-//     puts (message);
-}
-
-
 int main (void)
 {
     char *animate = "0";
 
+    zsys_set_logstream (stdout);
+    zsys_info ("zpipes_test_cluster: *** starting cluster tests ***");
+    
     zactor_t *green = zactor_new (zpipes_server, NULL);
     zstr_sendx (green, "BIND", "ipc://@/zpipes/green", NULL);
     zstr_sendx (green, "SET", "server/animate", animate, NULL);
@@ -62,27 +58,27 @@ int main (void)
     ssize_t bytes;
 
     //  Test 1 - simple read-write
-    s_wait ("Open writer");
+    zsys_info ("zpipes_test_cluster: open writer");
     zpipes_client_t *writer = zpipes_client_new ("orange", ">test pipe");
 
-    s_wait ("Open reader");
+    zsys_info ("zpipes_test_cluster: open reader");
     zpipes_client_t *reader = zpipes_client_new ("green", "test pipe");
 
     //  Expect timeout error, EAGAIN
-    s_wait ("Read impatiently");
+    zsys_info ("zpipes_test_cluster: read impatiently");
     bytes = zpipes_client_read (reader, buffer, 6, 200);
     assert (bytes == -1);
     assert (zpipes_client_error (reader) == EAGAIN);
     
-    s_wait ("Write to pipe");
+    zsys_info ("zpipes_test_cluster: write to pipe");
     bytes = zpipes_client_write (writer, "Hello, World", 12, 0);
     assert (bytes == 12);
     
-    s_wait ("Read from pipe");
+    zsys_info ("zpipes_test_cluster: read from pipe");
     bytes = zpipes_client_read (reader, buffer, 12, 0);
     assert (bytes == 12);
     
-    s_wait ("Write three chunks");
+    zsys_info ("zpipes_test_cluster: write three chunks");
     bytes = zpipes_client_write (writer, "CHUNK1", 6, 200);
     assert (bytes == 6);
     bytes = zpipes_client_write (writer, "CHUNK2", 6, 200);
@@ -90,52 +86,53 @@ int main (void)
     bytes = zpipes_client_write (writer, "CHUNK3", 6, 200);
     assert (bytes == 6);
 
-    s_wait ("Read two chunks");
+    zsys_info ("zpipes_test_cluster: read two chunks");
     bytes = zpipes_client_read (reader, buffer, 1, 200);
     assert (bytes == 1);
     bytes = zpipes_client_read (reader, buffer, 10, 200);
     assert (bytes == 10);
     
-    s_wait ("Close writer");
+    zsys_info ("zpipes_test_cluster: close writer");
     zpipes_client_destroy (&writer);
 
     //  Expect end of pipe (short read)
-    s_wait ("Read short");
+    zsys_info ("zpipes_test_cluster: read short");
     bytes = zpipes_client_read (reader, buffer, 50, 200);
     assert (bytes == 7);
 
     //  Expect end of pipe (empty chunk)
-    s_wait ("Read end of pipe");
+    zsys_info ("zpipes_test_cluster: read end of pipe");
     bytes = zpipes_client_read (reader, buffer, 50, 200);
     assert (bytes == 0);
 
     //  Expect illegal action (EBADF) writing on reader
-    s_wait ("Try to write on reader");
+    zsys_info ("zpipes_test_cluster: try to write on reader");
     bytes = zpipes_client_write (reader, "CHUNK1", 6, 200);
     assert (bytes == -1);
     assert (zpipes_client_error (reader) == EBADF);
 
-    s_wait ("Close reader");
+    zsys_info ("zpipes_test_cluster: close reader");
     zpipes_client_destroy (&reader);
     
     //  Test 2 - pipe reuse
-    s_wait ("Open reader");
+    zsys_info ("zpipes_test_cluster: open reader");
     reader = zpipes_client_new ("green", "test pipe 2");
 
-    s_wait ("Open writer");
+    zsys_info ("zpipes_test_cluster: open writer");
     writer = zpipes_client_new ("orange", ">test pipe 2");
 
-    s_wait ("Close reader");
+    zsys_info ("zpipes_test_cluster: close reader");
     zpipes_client_destroy (&reader);
 
-    s_wait ("Close writer");
+    zsys_info ("zpipes_test_cluster: close writer");
     zpipes_client_destroy (&writer);
 
-    s_wait ("Open reader reusing pipe name");
+    zsys_info ("zpipes_test_cluster: open reader reusing pipe name");
     reader = zpipes_client_new ("green", "test pipe 2");
     zpipes_client_destroy (&reader);
 
     zactor_destroy (&green);
     zactor_destroy (&orange);
+    zsys_info ("zpipes_test_cluster: *** ending cluster tests ***");
     return 0;
 }

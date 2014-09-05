@@ -29,8 +29,8 @@
 @end
 */
 
-#include <czmq.h>
-#include "../include//zpipes_msg.h"
+#include "../include/zbroker.h"
+#include "../include/zpipes_msg.h"
 
 //  Structure of our class
 

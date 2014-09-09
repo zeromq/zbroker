@@ -75,7 +75,7 @@ struct _client_t {
 
 //  Include the generated server engine
 
-#include "zpipes_server_engine.h"
+#include "zpipes_server_engine.inc"
 
 //  This method handles all traffic from other server nodes
 static int
@@ -911,11 +911,14 @@ void
 zpipes_server_test (bool verbose)
 {
     printf (" * zpipes_server: \n");
+    if (verbose)
+        printf ("\n");
 
     //  @selftest
     //  Prepare test cases
     zactor_t *server = zactor_new (zpipes_server, NULL);
-    zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
+    if (verbose)
+        zstr_send (server, "VERBOSE");
     zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
 
     zsock_t *writer = zsock_new (ZMQ_DEALER);

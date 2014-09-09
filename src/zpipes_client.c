@@ -213,9 +213,13 @@ void
 zpipes_client_test (bool verbose)
 {
     printf (" * zpipes_client: ");
+    if (verbose)
+        printf ("\n");
+    
     //  @selftest
     zactor_t *server = zactor_new (zpipes_server, NULL);
-    zstr_sendx (server, "SET", "server/animate", verbose? "1": "0", NULL);
+    if (verbose)
+        zstr_send (server, "VERBOSE");
     zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
     
     zpipes_client_t *reader = zpipes_client_new ("local", "test pipe");

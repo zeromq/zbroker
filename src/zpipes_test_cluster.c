@@ -14,7 +14,6 @@
 
 int main (void)
 {
-    zsys_set_logstream (stdout);
     zsys_info ("zpipes_test_cluster: *** starting cluster tests ***");
     
     zactor_t *green = zactor_new (zpipes_server, NULL);

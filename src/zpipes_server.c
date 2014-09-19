@@ -892,7 +892,7 @@ zyre_handler (zloop_t *loop, zsock_t *reader, void *argument)
 //  Selftest
 
 static int
-s_expect_reply (void *dealer, int message_id)
+s_expect_reply (zsock_t *dealer, int message_id)
 {
     zpipes_msg_t *reply = zpipes_msg_recv (dealer);
     if (!reply) {
@@ -916,26 +916,20 @@ zpipes_server_test (bool verbose)
 
     //  @selftest
     //  Prepare test cases
+    const char *endpoint = "ipc://@/zpipes/local";
     zactor_t *server = zactor_new (zpipes_server, NULL);
     if (verbose)
         zstr_send (server, "VERBOSE");
-    zstr_sendx (server, "BIND", "ipc://@/zpipes/local", NULL);
+    zstr_sendx (server, "BIND", endpoint, NULL);
 
-    zsock_t *writer = zsock_new (ZMQ_DEALER);
+    zsock_t *writer = zsock_new_dealer (endpoint);
     assert (writer);
-    zsock_connect (writer, "ipc://@/zpipes/local");
-
-    zsock_t *writer2 = zsock_new (ZMQ_DEALER);
+    zsock_t *writer2 = zsock_new_dealer (endpoint);
     assert (writer2);
-    zsock_connect (writer2, "ipc://@/zpipes/local");
-
-    zsock_t *reader = zsock_new (ZMQ_DEALER);
+    zsock_t *reader = zsock_new_dealer (endpoint);
     assert (reader);
-    zsock_connect (reader, "ipc://@/zpipes/local");
-    
-    zsock_t *reader2 = zsock_new (ZMQ_DEALER);
+    zsock_t *reader2 = zsock_new_dealer (endpoint);
     assert (reader2);
-    zsock_connect (reader2, "ipc://@/zpipes/local");
     
     zchunk_t *chunk = zchunk_new ("Hello, World", 12);
     int32_t timeout = 100;

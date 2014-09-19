@@ -21,7 +21,7 @@
 */
 
 
-//  ---------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  State machine constants
 
 typedef enum {
@@ -98,7 +98,7 @@ s_event_name [] = {
 };
  
 
-//  ---------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Context for the whole server task. This embeds the application-level
 //  server context at its start (the entire structure, not a reference),
 //  so we can cast a pointer between server_t and s_server_t arbitrarily.
@@ -118,7 +118,7 @@ typedef struct {
 } s_server_t;
 
 
-//  ---------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Context for each connected client. This embeds the application-level
 //  client context at its start (the entire structure, not a reference),
 //  so we can cast a pointer between client_t and s_client_t arbitrarily.
@@ -173,7 +173,7 @@ static void
 static void
     collect_data_to_send (client_t *self);
 
-//  ---------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  These methods are an internal API for actions
 
 //  Set the next event, needed in at least one action in an internal
@@ -328,7 +328,7 @@ s_satisfy_pedantic_compilers (void)
 }
 
 
-//  ---------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Generic methods on protocol messages
 //  TODO: replace with lookup table, since ID is one byte
 
@@ -362,7 +362,7 @@ s_protocol_event (zpipes_msg_t *request)
 }
 
 
-//  ---------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  Client methods
 
 static s_client_t *
@@ -726,15 +726,6 @@ s_client_execute (s_client_t *self, int event)
                 else
                 if (self->event == have_data_event) {
                 }
-                else
-                if (self->event == expired_event) {
-                    if (!self->exception) {
-                        //  terminate
-                        if (self->server->verbose)
-                            zsys_debug ("%s:         $ terminate", self->log_prefix);
-                        self->next_event = terminate_event;
-                    }
-                }
                 else {
                     //  Handle unexpected protocol events
                     if (!self->exception) {
@@ -1019,15 +1010,6 @@ s_client_execute (s_client_t *self, int event)
                 }
                 else
                 if (self->event == have_data_event) {
-                }
-                else
-                if (self->event == expired_event) {
-                    if (!self->exception) {
-                        //  terminate
-                        if (self->server->verbose)
-                            zsys_debug ("%s:         $ terminate", self->log_prefix);
-                        self->next_event = terminate_event;
-                    }
                 }
                 else {
                     //  Handle unexpected protocol events
@@ -1396,10 +1378,11 @@ s_server_destroy (s_server_t **self_p)
     assert (self_p);
     if (*self_p) {
         s_server_t *self = *self_p;
+        //  Destroy clients before destroying the server
+        zhash_destroy (&self->clients);
         server_terminate (&self->server);
         zsock_destroy (&self->router);
         zconfig_destroy (&self->config);
-        zhash_destroy (&self->clients);
         zloop_destroy (&self->loop);
         free (self);
         *self_p = NULL;
@@ -1562,7 +1545,7 @@ s_watch_server_config (zloop_t *loop, int timer_id, void *argument)
 }
 
 
-//  ---------------------------------------------------------------------
+//  ---------------------------------------------------------------------------
 //  This is the server actor, which polls its two sockets and processes
 //  incoming messages
 

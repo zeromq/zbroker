@@ -2,8 +2,8 @@
     name = "zpipes_msg"
     title = "ZPIPES protocol"
     script = "zproto_codec_c"
-    header = "../include"
-    include = "../include/zbroker.h"
+    package_dir = "../include"
+    project_header = "../include/zbroker.h"
     >
     This is a codec for the ZPIPES protocol (RFC tbd)
     <include filename = "license.xml" />

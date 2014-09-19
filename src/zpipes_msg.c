@@ -629,6 +629,8 @@ zpipes_msg_recv (void *input)
 {
     assert (input);
     zmsg_t *msg = zmsg_recv (input);
+    if (!msg)
+        return NULL;            //  Interrupted
     //  If message came from a router socket, first frame is routing_id
     zframe_t *routing_id = NULL;
     if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER) {
@@ -654,6 +656,8 @@ zpipes_msg_recv_nowait (void *input)
 {
     assert (input);
     zmsg_t *msg = zmsg_recv_nowait (input);
+    if (!msg)
+        return NULL;            //  Interrupted
     //  If message came from a router socket, first frame is routing_id
     zframe_t *routing_id = NULL;
     if (zsocket_type (zsock_resolve (input)) == ZMQ_ROUTER) {
@@ -687,7 +691,7 @@ zpipes_msg_send (zpipes_msg_t **self_p, void *output)
     self->routing_id = NULL;
 
     //  Encode zpipes_msg message to a single zmsg
-    zmsg_t *msg = zpipes_msg_encode (&self);
+    zmsg_t *msg = zpipes_msg_encode (self_p);
     
     //  If we're sending to a ROUTER, send the routing_id first
     if (zsocket_type (zsock_resolve (output)) == ZMQ_ROUTER) {

@@ -1,9 +1,9 @@
 <class
     name = "zpipes_server"
     title = "ZPIPES server"
-    proto = "zpipes_msg"
     script = "zproto_server_c"
-    include = "../include/zbroker.h"
+    protocol_class = "zpipes_msg"
+    project_header = "../include/zbroker.h"
     >
     This is a server implementation for the ZPIPES protocol
     <include filename = "license.xml" />

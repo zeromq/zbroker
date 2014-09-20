@@ -14,14 +14,10 @@
 
 int main (void)
 {
-    char *animate = "0";
-
-    zsys_set_logstream (stdout);
     zsys_info ("zpipes_test_cluster: *** starting cluster tests ***");
     
     zactor_t *green = zactor_new (zpipes_server, NULL);
     zstr_sendx (green, "BIND", "ipc://@/zpipes/green", NULL);
-    zstr_sendx (green, "SET", "server/animate", animate, NULL);
     zstr_sendx (green, "SET", "zyre/interval", "100", NULL);
     zstr_sendx (green, "SET", "zyre/nodeid", "green", NULL);
     
@@ -41,7 +37,6 @@ int main (void)
 
     zactor_t *orange = zactor_new (zpipes_server, NULL);
     zstr_sendx (orange, "BIND", "ipc://@/zpipes/orange", NULL);
-    zstr_sendx (orange, "SET", "server/animate", animate, NULL);
     zstr_sendx (orange, "SET", "zyre/interval", "100", NULL);
     zstr_sendx (orange, "SET", "zyre/nodeid", "orange", NULL);
     

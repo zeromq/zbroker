@@ -38,6 +38,10 @@ extern "C" {
 //
 //      zactor_destroy (&zpipes_server);
 //  
+//  Enable verbose logging of commands and activity:
+//
+//      zstr_send (server, "VERBOSE");
+//
 //  Bind zpipes server to specified endpoint. TCP endpoints may specify
 //  the port number as "*" to aquire an ephemeral port:
 //
@@ -70,11 +74,11 @@ extern "C" {
 //
 //  This is the zpipes_server constructor as a zactor_fn:
 //
-CZMQ_EXPORT void
+void
     zpipes_server (zsock_t *pipe, void *args);
 
 //  Self test of this class
-CZMQ_EXPORT void
+void
     zpipes_server_test (bool verbose);
 //  @end
 
